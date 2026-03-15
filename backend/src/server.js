@@ -34,6 +34,15 @@ app.use('/api/export', auth, require('./routes/exportRoutes'));     // WordPress
 app.use('/api/health-checks', auth, require('./routes/healthChecks')); // Post-publication monitoring
 app.use('/api/auth', require('./routes/authRoutes'));               // Login
 
+// Serve Frontend
+const path = require('path');
+const publicPath = path.join(__dirname, '..', 'public');
+app.use(express.static(publicPath));
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/') || req.path === '/health') return next();
+  res.sendFile(path.join(publicPath, 'index.html'));
+});
+
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
