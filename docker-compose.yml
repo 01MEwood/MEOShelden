@@ -1,0 +1,45 @@
+# MEOS:HELDEN — Docker Compose
+# Deploy: helden.meosapp.de (Frontend) + helden-api.meosapp.de (Backend)
+
+version: '3.8'
+
+services:
+  helden-frontend:
+    image: memario/meos-helden-frontend:latest
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: https://helden-api.meosapp.de
+    ports:
+      - "3200:80"
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  helden-backend:
+    image: memario/meos-helden-backend:latest
+    build:
+      context: ./backend
+    ports:
+      - "4200:4200"
+    environment:
+      - PORT=4200
+      - DATABASE_URL=${DATABASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATAFORSEO_LOGIN=${DATAFORSEO_LOGIN}
+      - DATAFORSEO_PASSWORD=${DATAFORSEO_PASSWORD}
+      - GSC_CREDENTIALS=${GSC_CREDENTIALS}
+      - GSC_SITE_URL=https://schreinerhelden.de/
+      - JWT_SECRET=${JWT_SECRET}
+      - FRONTEND_URL=https://helden.meosapp.de
+      - WP_URL=https://schreinerhelden.de
+      - WP_USER=${WP_USER}
+      - WP_APP_PASSWORD=${WP_APP_PASSWORD}
+    restart: unless-stopped
+    depends_on:
+      - helden-frontend
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+
+# Note: Uses shared PostgreSQL (Supabase or existing VPS Postgres)
+# No separate DB container needed — shares meos_seo database with separate schema

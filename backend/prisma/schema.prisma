@@ -1,0 +1,231 @@
+// ============================================
+// MEOS:HELDEN — Prisma Schema
+// Schema: meos_helden (separate from meos_seo)
+// ============================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ── KNOWLEDGE BASE ──
+
+enum ChunkCategory {
+  EXPERT_PRINCIPLE
+  PAGE_TEMPLATE
+  SCHEMA_TEMPLATE
+  LOKALKOLORIT
+  BRAND_SETTINGS
+  PRODUCT_INFO
+  CUSTOMER_VOICE    // VoC-Datenbank (Board Runde 2)
+  CUSTOMER_REVIEW
+  FAQ_ITEM
+  REFERENCE_PROJECT
+  COMPETITOR_DATA
+}
+
+model KnowledgeChunk {
+  id          String        @id @default(uuid())
+  category    ChunkCategory
+  subcategory String?
+  title       String
+  content     String
+  metadata    Json?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  usages      ChunkUsage[]
+
+  @@map("knowledge_chunks")
+  @@index([category])
+  @@index([category, subcategory])
+}
+
+// ── CITY PROFILES (Board Runde 1: Ort-Priorisierung) ──
+
+model CityProfile {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  slug            String   @unique        // "stuttgart", "schwaebisch-hall"
+  tier            Int                     // 1, 2, or 3
+  einwohner       Int
+  kaufkraftIndex  Float
+  entfernungKm    Int                     // from Murrhardt
+  fahrtzeitMin    Int
+  priorityScore   Float                   // calculated: einwohner × kaufkraft × wettbewerb
+  geoCode         String?                 // DataForSEO geo code
+  wikidataId      String?                 // for Schema.org sameAs
+  stadtteile      String[]               // array of district names
+  wohntypen       String[]               // ["Altbau", "Neubau", ...]
+  painPoints      String[]               // city-specific problems
+  lokalkolorit    String?                 // schwäbische Note text
+  uniqueValueAdd  String?                 // Board R2: unique content idea for this city
+  localBacklinks  String[]               // Board R4: local link sources
+  hasGbpStrategy  Boolean  @default(false) // Board R1: GBP configured?
+  indexStatus     String   @default("noindex") // Board R4: "noindex" | "indexed"
+  firstExternalLink String?              // Board R4: URL of first external link
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  generations     Generation[]
+
+  @@map("city_profiles")
+}
+
+// ── PIPELINE GENERATIONS ──
+
+enum PageType {
+  ORTS_LP
+  PRODUCT_PAGE
+  BLOG
+  PILLAR
+}
+
+enum GenerationStatus {
+  INTELLIGENCE    // Stufe 1 running
+  STRATEGY        // Stufe 2 running
+  RETRIEVAL       // Stufe 3 running
+  GENERATING      // Stufe 4 running
+  BOARD_REVIEW    // Stufe 5 running
+  APPROVED        // Board passed
+  REJECTED        // Board failed, needs re-gen
+  EXPORTED        // Stufe 6 done, WP-ready
+  PUBLISHED       // Live on WordPress
+  NEEDS_RESCAN    // Board R4: Quartals-Check triggered
+}
+
+enum LayoutVariant {
+  LAYOUT_A
+  LAYOUT_B
+  LAYOUT_C
+}
+
+model Generation {
+  id              String           @id @default(uuid())
+  pageType        PageType
+  status          GenerationStatus @default(INTELLIGENCE)
+  layoutVariant   LayoutVariant?   // Board R1: variable layouts
+  
+  // Inputs
+  primaryKeyword  String
+  secondaryKeywords String[]
+  targetCity      String?
+  targetProduct   String?
+  
+  // Stufe 1: Intelligence
+  serpData        Json?            // Top-10 SERP results
+  keywordCluster  Json?            // Long-tail keywords + volumes
+  competitorData  Json?            // Top-3 analysis: word count, schema, speed
+  gscData         Json?            // Current rankings + impressions
+  searchIntent    String?          // Board R4: "local" | "national" | "informational"
+  topThreeAvgWords Int?            // Competitor average word count
+  
+  // Stufe 2: Strategy
+  strategyBrief   Json?            // Architecture decisions
+  targetWordCount Int?             // 15% above top-3 average (Board R5)
+  clusterMapping  Json?            // Pillar/Cluster assignment
+  internalLinks   Json?            // Which pages to link
+  uniqueBlocks    String[]         // Board R4: 2+ blocks competitors don't have
+  
+  // Stufe 3: RAG Chunks used
+  chunksUsed      ChunkUsage[]
+  
+  // Stufe 4: Generated content
+  outputContent   String?          // Markdown/HTML content
+  outputSchema    Json?            // Schema.org JSON-LD array
+  outputMeta      Json?            // { title, description, wordCount, keywords }
+  ctaText         String?          // Board R2: contextual CTA
+  priceRange      String?          // Board R4: "Standard ab X€ — Premium ab Y€"
+  
+  // Stufe 5: Board Review
+  boardScores     Json?            // 10 experts + 2 test customers
+  boardPass       Boolean?         // All passed?
+  boardRound      Int     @default(1) // Which re-gen round
+  
+  // Stufe 6: Export
+  exportHtml      String?          // GenerateBlocks-compatible HTML
+  exportFormat    String  @default("generateblocks") // Board R4
+  wpPostId        Int?             // WordPress post ID after push
+  wpUrl           String?          // Live URL
+  
+  // Tracking
+  tokensUsed      Int?
+  costUsd         Float?
+  durationMs      Int?
+  model           String  @default("gpt-4o")
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  city            CityProfile? @relation(fields: [targetCity], references: [slug])
+
+  @@map("generations")
+  @@index([status])
+  @@index([pageType])
+  @@index([targetCity])
+  @@index([createdAt])
+}
+
+model ChunkUsage {
+  id             String          @id @default(uuid())
+  generation     Generation      @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  generationId   String
+  chunk          KnowledgeChunk  @relation(fields: [chunkId], references: [id])
+  chunkId        String
+  relevanceScore Float?
+  selectionReason String?        // "mandatory_template", "similarity", etc.
+
+  @@map("chunk_usage")
+  @@index([generationId])
+}
+
+// ── CLUSTER ARCHITECTURE (Board Runde 2) ──
+
+model ClusterMap {
+  id            String   @id @default(uuid())
+  pillarSlug    String                   // e.g. "/schrank-nach-mass-ratgeber"
+  pillarTitle   String
+  clusterSlugs  String[]                 // e.g. ["/schreiner-stuttgart", "/dachschraegenschrank"]
+  healthScore   Int      @default(0)     // Board R2: count of cluster pages
+  lastChecked   DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("cluster_map")
+  @@unique([pillarSlug])
+}
+
+// ── POST-PUBLICATION TRACKING (Board Runde 4) ──
+
+model PublicationCheck {
+  id              String   @id @default(uuid())
+  generationId    String
+  pageUrl         String
+  checkType       String                 // "serp_rescan", "link_check", "cta_target_check"
+  result          Json?
+  isHealthy       Boolean  @default(true)
+  checkedAt       DateTime @default(now())
+
+  @@map("publication_checks")
+  @@index([generationId])
+  @@index([checkType])
+}
+
+// ── AUTH (shared with MEOS:SEO) ──
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("team") // "admin" | "team"
+  createdAt DateTime @default(now())
+
+  @@map("users")
+}
