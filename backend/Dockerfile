@@ -3,6 +3,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 COPY . .
-RUN npx prisma generate
-EXPOSE 4200
+ENV PORT=3800
+EXPOSE 3800
 CMD ["node", "src/server.js"]

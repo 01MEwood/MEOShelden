@@ -1,11 +1,11 @@
 // ============================================
-// MEOS:HELDEN — City Profile Seed
+// MEOS:HELDEN — City Profile Seed (Raw SQL)
 // Run: node seeds/seed-cities.js
 // ============================================
 
-require('dotenv').config();
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+require('dotenv').config({ path: require('path').join(__dirname, '..', 'backend', '.env') });
+if (!process.env.DATABASE_URL) require('dotenv').config();
+const { pool, query, queryOne } = require('../backend/src/db');
 
 const cities = [
   // ── TIER 1 ──
@@ -167,34 +167,41 @@ const cities = [
 async function seed() {
   console.log(`🏙️ Seeding ${cities.length} city profiles...`);
 
-  for (const city of cities) {
-    await prisma.cityProfile.upsert({
-      where: { slug: city.slug },
-      update: city,
-      create: city,
-    });
-    console.log(`  ✅ ${city.name} (Tier ${city.tier}, Priority ${city.priorityScore})`);
+  for (const c of cities) {
+    await query(
+      `INSERT INTO city_profiles (id, name, slug, tier, einwohner, "kaufkraftIndex", "entfernungKm", "fahrtzeitMin", "priorityScore", "geoCode", "wikidataId", stadtteile, wohntypen, "painPoints", lokalkolorit, "uniqueValueAdd", "localBacklinks", "createdAt", "updatedAt")
+       VALUES (uuid_generate_v4()::text, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, NOW(), NOW())
+       ON CONFLICT (slug) DO UPDATE SET
+         name=$1, tier=$3, einwohner=$4, "kaufkraftIndex"=$5, "entfernungKm"=$6, "fahrtzeitMin"=$7,
+         "priorityScore"=$8, "geoCode"=$9, "wikidataId"=$10, stadtteile=$11, wohntypen=$12,
+         "painPoints"=$13, lokalkolorit=$14, "uniqueValueAdd"=$15, "localBacklinks"=$16, "updatedAt"=NOW()`,
+      [c.name, c.slug, c.tier, c.einwohner, c.kaufkraftIndex, c.entfernungKm, c.fahrtzeitMin,
+       c.priorityScore, c.geoCode || null, c.wikidataId || null, c.stadtteile || [], c.wohntypen || [],
+       c.painPoints || [], c.lokalkolorit || null, c.uniqueValueAdd || null, c.localBacklinks || []]
+    );
+    console.log(`  ✅ ${c.name} (Tier ${c.tier}, Priority ${c.priorityScore})`);
   }
 
   console.log(`\n🎉 ${cities.length} City Profiles ready!`);
 
   // Seed initial cluster map
   const clusterSeeds = [
-    { pillarSlug: '/schrank-nach-mass-ratgeber', pillarTitle: 'Schrank nach Maß — Kompletter Ratgeber', clusterSlugs: [], healthScore: 0 },
-    { pillarSlug: '/was-kostet-ein-einbauschrank', pillarTitle: 'Was kostet ein Einbauschrank?', clusterSlugs: [], healthScore: 0 },
-    { pillarSlug: '/schreiner-vs-konfigurator', pillarTitle: 'Schreiner vs. Online-Konfigurator', clusterSlugs: [], healthScore: 0 },
+    { pillarSlug: '/schrank-nach-mass-ratgeber', pillarTitle: 'Schrank nach Maß — Kompletter Ratgeber' },
+    { pillarSlug: '/was-kostet-ein-einbauschrank', pillarTitle: 'Was kostet ein Einbauschrank?' },
+    { pillarSlug: '/schreiner-vs-konfigurator', pillarTitle: 'Schreiner vs. Online-Konfigurator' },
   ];
 
-  for (const cluster of clusterSeeds) {
-    await prisma.clusterMap.upsert({
-      where: { pillarSlug: cluster.pillarSlug },
-      update: cluster,
-      create: cluster,
-    });
-    console.log(`  📂 Pillar: ${cluster.pillarTitle}`);
+  for (const cl of clusterSeeds) {
+    await query(
+      `INSERT INTO cluster_map (id, "pillarSlug", "pillarTitle", "clusterSlugs", "healthScore", "createdAt", "updatedAt")
+       VALUES (uuid_generate_v4()::text, $1, $2, '{}', 0, NOW(), NOW())
+       ON CONFLICT ("pillarSlug") DO UPDATE SET "pillarTitle"=$2, "updatedAt"=NOW()`,
+      [cl.pillarSlug, cl.pillarTitle]
+    );
+    console.log(`  📂 Pillar: ${cl.pillarTitle}`);
   }
 
   console.log('\n✅ Cluster map initialized!');
 }
 
-seed().catch(console.error).finally(() => prisma.$disconnect());
+seed().catch(console.error).finally(() => pool.end());

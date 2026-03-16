@@ -63,6 +63,97 @@ const STATUS_LABELS = {
   REJECTED: '❌ Abgelehnt', EXPORTED: '📦 Exportiert', PUBLISHED: '🌐 Live',
 };
 
+// ── Knowledge Tab Component ──
+function KnowledgeTab({ authFetch, stats }) {
+  const [chunks, setChunks] = useState([]);
+  const [embedStatus, setEmbedStatus] = useState(null);
+  const [filter, setFilter] = useState('');
+  const [embedding, setEmbedding] = useState(false);
+  const [embedMsg, setEmbedMsg] = useState('');
+
+  useEffect(() => {
+    authFetch('/api/knowledge?limit=200').then(d => d.success && setChunks(d.chunks)).catch(() => {});
+    authFetch('/api/knowledge/embed-status').then(d => d.success && setEmbedStatus(d)).catch(() => {});
+  }, []);
+
+  async function handleEmbedAll() {
+    setEmbedding(true); setEmbedMsg('');
+    try {
+      const d = await authFetch('/api/knowledge/embed-all', { method: 'POST' });
+      setEmbedMsg(d.message || 'Gestartet...');
+      // Poll status every 5s
+      const poll = setInterval(async () => {
+        const s = await authFetch('/api/knowledge/embed-status');
+        if (s.success) { setEmbedStatus(s); if (s.missing === 0) { clearInterval(poll); setEmbedding(false); setEmbedMsg('✅ Alle Embeddings fertig!'); } }
+      }, 5000);
+      setTimeout(() => clearInterval(poll), 300000); // max 5 min
+    } catch (e) { setEmbedMsg('Fehler: ' + e.message); setEmbedding(false); }
+  }
+
+  const categories = [...new Set(chunks.map(c => c.category))].sort();
+  const filtered = filter ? chunks.filter(c => c.category === filter) : chunks;
+
+  return (
+    <div className="space-y-4">
+      <h2 className="font-bold text-lg">🧠 RAG Knowledge Base</h2>
+
+      {/* Embed Status Bar */}
+      <div className="bg-white rounded-xl border p-4 flex flex-wrap items-center gap-4">
+        <div className="flex-1 min-w-[200px]">
+          <div className="text-sm font-medium">Embedding-Status</div>
+          {embedStatus ? (
+            <div className="flex items-center gap-3 mt-1">
+              <span className="text-sm">{embedStatus.embedded}/{embedStatus.total} Chunks embedded</span>
+              {embedStatus.missing > 0 ? (
+                <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">⚠️ {embedStatus.missing} fehlen</span>
+              ) : (
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">✅ Komplett</span>
+              )}
+            </div>
+          ) : <span className="text-xs text-gray-400">Laden...</span>}
+          {embedMsg && <div className="text-xs text-blue-600 mt-1">{embedMsg}</div>}
+        </div>
+        <button onClick={handleEmbedAll} disabled={embedding || (embedStatus?.missing === 0)}
+          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition">
+          {embedding ? '⏳ Läuft...' : '🧠 Embed All'}
+        </button>
+      </div>
+
+      {/* Category Filter */}
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={() => setFilter('')}
+          className={`px-3 py-1 rounded-full text-xs font-medium transition ${!filter ? 'bg-orange-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+          Alle ({chunks.length})
+        </button>
+        {categories.map(cat => (
+          <button key={cat} onClick={() => setFilter(cat)}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition ${filter === cat ? 'bg-orange-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+            {cat} ({chunks.filter(c => c.category === cat).length})
+          </button>
+        ))}
+      </div>
+
+      {/* Chunk List */}
+      <div className="space-y-2">
+        {filtered.map(c => (
+          <div key={c.id} className="bg-white rounded-lg border p-3 flex items-start gap-3">
+            <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${c.hasEmbedding ? 'bg-green-500' : 'bg-red-400'}`} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">{c.category}</span>
+                {c.subcategory && <span className="text-xs text-gray-400">{c.subcategory}</span>}
+              </div>
+              <div className="font-medium text-sm mt-1 truncate">{c.title}</div>
+              <div className="text-xs text-gray-400 mt-0.5 line-clamp-2">{c.content?.slice(0, 200)}...</div>
+            </div>
+          </div>
+        ))}
+        {filtered.length === 0 && <p className="text-gray-400 text-center py-8">Keine Chunks gefunden.</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const { user, token, login, logout, authFetch } = useAuth();
   const [tab, setTab] = useState('pipeline');
@@ -461,18 +552,7 @@ export default function App() {
         )}
 
         {/* ═══ KNOWLEDGE TAB ═══ */}
-        {tab === 'knowledge' && (
-          <div>
-            <h2 className="font-bold text-lg mb-4">🧠 RAG Knowledge Base</h2>
-            <p className="text-gray-500 text-sm mb-4">
-              {stats?.knowledgeChunks || '?'} Chunks in der Wissensbasis. Experten-Prinzipien, Ort-Daten, Bewertungen, Templates, Schema-Vorlagen.
-            </p>
-            <div className="bg-white rounded-xl border p-6 text-center text-gray-400">
-              Knowledge-Manager wird geladen...
-              <br/><span className="text-xs">Nutze POST /api/knowledge/batch zum Befüllen via API.</span>
-            </div>
-          </div>
-        )}
+        {tab === 'knowledge' && <KnowledgeTab authFetch={authFetch} stats={stats} />}
 
         {/* ═══ HEALTH TAB ═══ */}
         {tab === 'health' && (
