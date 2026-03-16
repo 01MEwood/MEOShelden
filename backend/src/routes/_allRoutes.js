@@ -57,7 +57,47 @@ knowledge.put('/:id', async (req, res) => {
   await prisma.$executeRawUnsafe(`UPDATE knowledge_chunks SET embedding = $1::vector WHERE id = $2`, `[${emb.join(',')}]`, req.params.id);
   res.json({ success: true, data: chunk });
 });
+// Embed ALL chunks that don't have embeddings yet
+knowledge.post('/embed-all', async (req, res) => {
+  try {
+    const unembedded = await prisma.$queryRawUnsafe(
+      `SELECT id, title, content FROM knowledge_chunks WHERE embedding IS NULL AND "isActive" = true`
+    );
+    if (unembedded.length === 0) {
+      return res.json({ success: true, message: 'Alle Chunks haben bereits Embeddings.', total: 0 });
+    }
+    res.json({ success: true, message: `Starte Embedding für ${unembedded.length} Chunks...`, total: unembedded.length });
+    (async () => {
+      let success = 0, failed = 0;
+      for (const chunk of unembedded) {
+        try {
+          const emb = await pipeline.createEmbedding(`${chunk.title}: ${chunk.content}`);
+          await prisma.$executeRawUnsafe(
+            `UPDATE knowledge_chunks SET embedding = $1::vector WHERE id = $2`,
+            `[${emb.join(',')}]`, chunk.id
+          );
+          success++;
+          console.log(`  Embedded: ${chunk.title} (${success}/${unembedded.length})`);
+          await new Promise(r => setTimeout(r, 150));
+        } catch (e) {
+          failed++;
+          console.log(`  Failed: ${chunk.title}: ${e.message}`);
+        }
+      }
+      console.log(`Embedding complete: ${success} success, ${failed} failed`);
+    })();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+```
 
+Commit. Dann in PowerShell:
+```
+cd C:\Users\Video\MEOShelden
+git pull
+docker build -t mariomeosv40/meoshelden:latest .
+docker push mariomeosv40/meoshelden:latest
 knowledge.delete('/:id', async (req, res) => {
   await prisma.knowledgeChunk.update({ where: { id: req.params.id }, data: { isActive: false } });
   res.json({ success: true });
