@@ -43,7 +43,7 @@ router.post('/run', async (req, res) => {
 
     const gen = await queryOne(
       `INSERT INTO generations (id, "pageType", "primaryKeyword", "targetCity", "targetProduct", status, "createdBy", "createdAt", "updatedAt")
-       VALUES (uuid_generate_v4()::text, $1, $2, $3, $4, 'INTELLIGENCE', $5, NOW(), NOW()) RETURNING id`,
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, 'INTELLIGENCE', $5, NOW(), NOW()) RETURNING id`,
       [pageType, primaryKeyword, targetCity || null, targetProduct || null, req.user?.id || 'anonymous']
     );
 

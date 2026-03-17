@@ -47,7 +47,7 @@ router.post('/', async (req, res) => {
 
     const row = await queryOne(
       `INSERT INTO knowledge_chunks (id, category, subcategory, title, content, metadata, "isActive", "createdAt", "updatedAt")
-       VALUES (uuid_generate_v4()::text, $1, $2, $3, $4, $5, true, NOW(), NOW())
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, true, NOW(), NOW())
        RETURNING *`,
       [category, subcategory || null, title, content, metadata ? JSON.stringify(metadata) : null]
     );
@@ -74,7 +74,7 @@ router.post('/batch', async (req, res) => {
       try {
         const row = await queryOne(
           `INSERT INTO knowledge_chunks (id, category, subcategory, title, content, metadata, "isActive", "createdAt", "updatedAt")
-           VALUES (uuid_generate_v4()::text, $1, $2, $3, $4, $5, true, NOW(), NOW()) RETURNING id`,
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, true, NOW(), NOW()) RETURNING id`,
           [c.category, c.subcategory || null, c.title, c.content, c.metadata ? JSON.stringify(c.metadata) : null]
         );
         try {

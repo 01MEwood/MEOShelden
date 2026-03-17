@@ -42,7 +42,7 @@ router.post('/init', async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
     await require('../db').query(
-      `INSERT INTO users (id, email, password, name, role) VALUES (uuid_generate_v4()::text, $1, $2, $3, 'admin')`,
+      `INSERT INTO users (id, email, password, name, role) VALUES (gen_random_uuid(), $1, $2, $3, 'admin')`,
       [email, hash, name]
     );
     res.json({ success: true, message: 'Admin user created' });

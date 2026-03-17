@@ -14,7 +14,7 @@ router.post('/', async (req, res) => {
     const d = req.body;
     const map = await queryOne(
       `INSERT INTO cluster_map (id, "pillarSlug", "pillarTitle", "clusterSlugs", "healthScore", "createdAt", "updatedAt")
-       VALUES (uuid_generate_v4()::text, $1, $2, $3, $4, NOW(), NOW()) RETURNING *`,
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NOW()) RETURNING *`,
       [d.pillarSlug, d.pillarTitle, d.clusterSlugs || [], d.healthScore || 0]
     );
     res.json({ success: true, data: map });

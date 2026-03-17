@@ -244,7 +244,7 @@ async function runRetrieval(generationId) {
   for (const chunk of uniqueChunks) {
     await query(
       `INSERT INTO chunk_usage (id, "generationId", "chunkId", "relevanceScore", "selectionReason")
-       VALUES (uuid_generate_v4()::text, $1, $2, $3, $4)`,
+       VALUES (gen_random_uuid(), $1, $2, $3, $4)`,
       [generationId, chunk.id, chunk.similarity, chunk.reason]
     );
   }
@@ -402,7 +402,7 @@ async function runFullPipeline({ generationId, pageType, primaryKeyword, targetC
   if (!generationId) {
     const gen = await queryOne(
       `INSERT INTO generations (id, "pageType", "primaryKeyword", "targetCity", "targetProduct", status, "createdBy", "createdAt", "updatedAt")
-       VALUES (uuid_generate_v4()::text, $1, $2, $3, $4, 'INTELLIGENCE', $5, NOW(), NOW()) RETURNING id`,
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, 'INTELLIGENCE', $5, NOW(), NOW()) RETURNING id`,
       [pageType, primaryKeyword, targetCity, targetProduct, userId]
     );
     generationId = gen.id;

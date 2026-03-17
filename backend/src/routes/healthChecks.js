@@ -12,7 +12,7 @@ router.post('/cta-target', async (req, res) => {
 
     await query(
       `INSERT INTO publication_checks (id, "generationId", "pageUrl", "checkType", result, "isHealthy", "checkedAt")
-       VALUES (uuid_generate_v4()::text, 'system', '/termin', 'cta_target_check', $1, $2, NOW())`,
+       VALUES (gen_random_uuid(), 'system', '/termin', 'cta_target_check', $1, $2, NOW())`,
       [JSON.stringify({ statusCode: checkRes.status, hasLoremIpsum }), isOk]
     );
     res.json({ success: true, healthy: isOk, hasLoremIpsum, statusCode: checkRes.status });

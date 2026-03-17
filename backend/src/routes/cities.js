@@ -22,7 +22,7 @@ router.post('/', async (req, res) => {
     const d = req.body;
     const city = await queryOne(
       `INSERT INTO city_profiles (id, name, slug, tier, einwohner, "kaufkraftIndex", "entfernungKm", "fahrtzeitMin", "priorityScore", "geoCode", "wikidataId", stadtteile, wohntypen, "painPoints", lokalkolorit, "uniqueValueAdd", "localBacklinks", "hasGbpStrategy", "indexStatus", "createdAt", "updatedAt")
-       VALUES (uuid_generate_v4()::text, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, NOW(), NOW()) RETURNING *`,
+       VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, NOW(), NOW()) RETURNING *`,
       [d.name, d.slug, d.tier, d.einwohner, d.kaufkraftIndex, d.entfernungKm, d.fahrtzeitMin, d.priorityScore, d.geoCode, d.wikidataId, d.stadtteile||[], d.wohntypen||[], d.painPoints||[], d.lokalkolorit, d.uniqueValueAdd, d.localBacklinks||[], d.hasGbpStrategy||false, d.indexStatus||'noindex']
     );
     res.json({ success: true, data: city });
