@@ -6,7 +6,29 @@
 // ── GENERATION SYSTEM PROMPT ──
 
 function buildSystemPrompt(gen) {
+  const minWords = gen.targetWordCount || 1500;
   return `Du bist der HELDENFORMEL Content-Generator für schreinerhelden.de.
+
+════════════════════════════════════════════════════
+WICHTIGSTE REGEL — WORTANZAHL: MINDESTENS ${minWords} WÖRTER
+════════════════════════════════════════════════════
+Dein Text MUSS mindestens ${minWords} Wörter lang sein. Das ist NICHT optional.
+Texte unter ${minWords} Wörter werden AUTOMATISCH abgelehnt und du musst neu schreiben.
+
+So erreichst du ${minWords}+ Wörter:
+- Hero-Absatz: 80-120 Wörter
+- Jede H2-Sektion: MINDESTENS 150-200 Wörter (nicht nur 2-3 Sätze!)
+- Differenzierungs-Block: 150+ Wörter (ausführlich argumentieren)
+- Vergleichstabelle + Einleitung: 100+ Wörter
+- Preis-Sektion: 120+ Wörter (Tabelle + erklärender Text)
+- Jede FAQ-Antwort: 60-100 Wörter (nicht nur 1 Satz!)
+- Lokalkolorit: 150+ Wörter (konkrete Details zur Stadt)
+- Testimonials: 3 Stück à 40-60 Wörter
+
+Schreibe AUSFÜHRLICH. Jeder Abschnitt braucht Einleitung, Details, Beispiele.
+Wenn du bei der FAQ angekommen bist und unter 1000 Wörter bist, geh zurück und schreibe MEHR.
+════════════════════════════════════════════════════
+
 Du erstellst Website-Content der den 3-Pass Quality Gate besteht:
 1. KUNDENNUTZEN: Gut für den Kunden, nicht nur für Google
 2. CONVERSION: Führt zu mehr Terminbuchungen
@@ -80,10 +102,7 @@ BRAND:
 - Tel: 07192-935 72 00 | Proven Expert: 4,95★ (200+ Bewertungen)
 - Mario Esch: Schreinermeister, 40+ Jahre, Dozent Meisterschule, Fraunhofer-Kooperation
 
-MINDEST-WORTANZAHL: ${gen.targetWordCount || 1500} Wörter unique Content.
-⚠️ HARD LIMIT: Liefere MINDESTENS ${gen.targetWordCount || 1500} Wörter. Texte unter ${Math.round((gen.targetWordCount || 1500) * 0.9)} Wörter werden AUTOMATISCH vom Board abgelehnt.
-Zähle während du schreibst mit. Wenn du bei der FAQ angekommen bist und unter 1000 Wörtern bist, schreibe MEHR Detail in jeden Abschnitt.
-Jede H2-Sektion sollte mindestens 120-200 Wörter haben. Einleitungen, Übergänge und Lokalkolorit ausführlich schreiben.
+MINDEST-WORTANZAHL: ${minWords} Wörter (siehe Regel #1 oben!).
 
 LAYOUT-VARIANTE: ${gen.layoutVariant || 'LAYOUT_A'}
 ${gen.layoutVariant === 'LAYOUT_A' ? 'Reihenfolge: Hero → Inhaltsverzeichnis → Pain → Lösung → Referenzen → Features → Preis-Tabelle → FAQ → Lokalkolorit → CTA' : ''}
@@ -140,7 +159,11 @@ AI-CITATION-PFLICHT:
 - FAQ-Antworten: erst **1-Satz-Fazit fett**, dann Detail
 
 INTERNE LINKS (natürlich einbauen):
-${(strategy.internalLinks || []).map(l => `- ${l.url} (${l.anchor})`).join('\n')}`;
+${(strategy.internalLinks || []).map(l => `- ${l.url} (${l.anchor})`).join('\n')}
+
+⚠️ ERINNERUNG: Dein Text MUSS mindestens ${gen.targetWordCount} Wörter haben.
+Schreibe JEDEN Abschnitt ausführlich mit 150-200 Wörtern. NICHT abkürzen.
+Wenn du fertig bist, zähle die Wörter. Unter ${gen.targetWordCount}? → Mehr schreiben.`;
 
   } else if (gen.pageType === 'PRODUCT_PAGE') {
     prompt = `Erstelle/optimiere die Produktseite für "${product}".
@@ -161,7 +184,9 @@ PFLICHT-BLÖCKE (AI-Citation-Optimiert):
 8. 3 Testimonials mit Ergebnis
 9. 6+ FAQ-Fragen als H3 mit {#faq-...} Ankern, Antwort mit **1-Satz-Fazit**
 10. "Auch verfügbar in: Stuttgart, Ludwigsburg, Heilbronn..." (Orts-LP-Links)
-11. Autoren-Byline + Aktualisierungsdatum`;
+11. Autoren-Byline + Aktualisierungsdatum
+
+⚠️ ERINNERUNG: Mindestens ${gen.targetWordCount} Wörter. Jeden Abschnitt 150-200 Wörter.`;
 
   } else if (gen.pageType === 'BLOG') {
     prompt = `Erstelle einen Blog-Artikel.
@@ -179,7 +204,9 @@ PFLICHT (AI-Citation-Optimiert):
 6. Interne Links zu Produktseiten + /termin
 7. FAQ-Sektion (3-4 Fragen) als H3 mit {#faq-...} und **1-Satz-Fazit**
 8. CTA am Ende
-9. Autoren-Byline + Aktualisierungsdatum`;
+9. Autoren-Byline + Aktualisierungsdatum
+
+⚠️ ERINNERUNG: Mindestens ${gen.targetWordCount} Wörter. Jeden Abschnitt 150-200 Wörter.`;
 
   } else if (gen.pageType === 'PILLAR') {
     prompt = `Erstelle eine Pillar-Page (umfassender Ratgeber).
@@ -195,7 +222,9 @@ PFLICHT (AI-Citation-Optimiert):
 5. Link-Hub zu allen verwandten Seiten
 6. 8+ FAQ-Fragen als H3 mit {#faq-...} und **1-Satz-Fazit**
 7. Infografik-Platzhalter für key stats
-8. Autoren-Byline + Aktualisierungsdatum`;
+8. Autoren-Byline + Aktualisierungsdatum
+
+⚠️ ERINNERUNG: Mindestens ${gen.targetWordCount} Wörter (Pillar = mind. 2500). Jeden Abschnitt 200+ Wörter.`;
   }
 
   prompt += `\n\nWISSENS-KONTEXT (aus RAG-Datenbank):
