@@ -68,6 +68,7 @@ BOARD-REGELN (PFLICHT):
 - Differenzierungs-Block: "Echte Schreinerei seit 40 Jahren, kein Franchise-System, kein Online-Konfigurator" — als eigener Absatz
 - Vergleichstabelle: Schreinerhelden vs. Online-Konfigurator (mindestens 5 Zeilen, als echte Tabelle)
 - Testimonials mit ERGEBNIS: "40% mehr Stauraum" statt nur "Tolle Arbeit"
+- Testimonials OHNE Jahreszahl: Nur Vorname + Ort + Ergebnis. KEINE Datumsangaben wie "2024" oder "letztes Jahr" — wirkt veraltet.
 - Synonyme einbauen: Einbauschrank/Wandschrank/Schrankwand, Schreiner/Tischler
 - Bei fehlenden Referenzen EHRLICH: "Unsere nächsten Referenzen aus deiner Region: [Nachbarstadt]"
 - IHK/Handwerkskammer als Trust-Signal erwähnen
@@ -80,6 +81,9 @@ BRAND:
 - Mario Esch: Schreinermeister, 40+ Jahre, Dozent Meisterschule, Fraunhofer-Kooperation
 
 MINDEST-WORTANZAHL: ${gen.targetWordCount || 1500} Wörter unique Content.
+⚠️ HARD LIMIT: Liefere MINDESTENS ${gen.targetWordCount || 1500} Wörter. Texte unter ${Math.round((gen.targetWordCount || 1500) * 0.9)} Wörter werden AUTOMATISCH vom Board abgelehnt.
+Zähle während du schreibst mit. Wenn du bei der FAQ angekommen bist und unter 1000 Wörtern bist, schreibe MEHR Detail in jeden Abschnitt.
+Jede H2-Sektion sollte mindestens 120-200 Wörter haben. Einleitungen, Übergänge und Lokalkolorit ausführlich schreiben.
 
 LAYOUT-VARIANTE: ${gen.layoutVariant || 'LAYOUT_A'}
 ${gen.layoutVariant === 'LAYOUT_A' ? 'Reihenfolge: Hero → Inhaltsverzeichnis → Pain → Lösung → Referenzen → Features → Preis-Tabelle → FAQ → Lokalkolorit → CTA' : ''}
@@ -203,8 +207,16 @@ ${contextBlocks}`;
 // ── BOARD REVIEW PROMPT ──
 
 const BOARD_SYSTEM = `Du simulierst das 12-Köpfe-Board für MEOS:HELDEN.
-Prüfe den Content durch ALLE 12 Perspektiven. Sei STRENG aber FAIR.
+Prüfe den Content durch ALLE 12 Perspektiven. Sei STRENG.
 Gib für jeden PASS ✅, WARNING ⚠️, oder FAIL ❌ mit 1-Satz-Begründung.
+
+═══ AUTOMATISCHE FAIL-REGELN (nicht verhandelbar) ═══
+- Wortanzahl unter ZIEL-WORTANZAHL → Eli Schwartz gibt automatisch ❌ FAIL
+- Wortanzahl unter 90% des Ziels → GESAMTES Board gibt FAIL
+- Testimonials mit Jahreszahlen → Joanna Wiebe gibt ❌ FAIL
+- Kein Inhaltsverzeichnis → Lily Ray gibt ❌ FAIL
+- H2s ohne Anker-IDs → Lily Ray gibt ❌ FAIL
+═══ ENDE AUTOMATISCHE FAIL-REGELN ═══
 
 Die 10 Experten:
 1. Eli Schwartz — Duplicate/Doorway-Check: ≥40% unique? Variable Struktur?
@@ -265,6 +277,15 @@ AI-CITATION-PRÜFPUNKTE:
 - FAQ-Antworten mit 1-Satz-Fazit?
 - "Zuletzt aktualisiert" sichtbar?
 
+WORTANZAHL-CHECK (AUTOMATISCHER FAIL):
+Die Ziel-Wortanzahl ist ${gen.targetWordCount || 1500}.
+Die tatsächliche Wortanzahl ist ${gen.outputMeta?.wordCount || '?'}.
+Wenn die tatsächliche Wortanzahl UNTER dem Ziel liegt → Eli Schwartz MUSS ❌ FAIL geben.
+Wenn die tatsächliche Wortanzahl unter 90% des Ziels liegt → ALLE Experten MÜSSEN ❌ FAIL geben.
+
+TESTIMONIAL-CHECK:
+Wenn Testimonials Jahreszahlen enthalten (2023, 2024, 2025 etc.) → Joanna Wiebe MUSS ❌ FAIL geben.
+
 Führe jetzt den vollständigen Board-Review durch.`;
 }
 
@@ -312,43 +333,55 @@ ${content.slice(0, 4000)}`;
 
 // ── EXPORT SYSTEM PROMPT ──
 
-const EXPORT_SYSTEM = `Du konvertierst Markdown-Content in WordPress/GenerateBlocks-kompatibles HTML.
+const EXPORT_SYSTEM = `Du konvertierst Markdown-Content in Elementor-kompatible HTML-Blöcke.
 
-REGELN (Board-Approved + AI-Citation-Optimiert):
-- SEMANTISCHES HTML: Nutze <article>, <main>, <section>, <nav> statt nur <div>
-- Gesamtstruktur: <article> umschließt alles, <nav> für TOC, <section> für jeden H2-Block
-- Max DOM-Tiefe: 8 Ebenen (Board R4)
-- Max Inline-CSS: 5KB (Board R4)
-- Alle Bilder: <img loading="lazy" width="X" height="Y" src="..." alt="...">
-- INHALTSVERZEICHNIS als <nav aria-label="Inhaltsverzeichnis"> mit <ol> und Anker-Links
-- JEDE H2 bekommt eine id="..." (kebab-case des Titels)
-- JEDE H2-Sektion in <section id="..."> gewrapped
-- Sticky CTA: scroll-triggered, dismissable, 80px padding-bottom, NICHT unter Cookie-Banner
-- FAQ als Accordion (<details>/<summary>) für Progressive Disclosure (Board R3)
-  JEDE FAQ-Frage hat eine id: <details id="faq-...">
-- VERGLEICHSTABELLEN und PREIS-TABELLEN als echte <table> mit <thead>/<tbody>
-- GenerateBlocks CSS-Klassen: gb-container, gb-headline, gb-button
-- Schema.org als separater <script type="application/ld+json"> Block
-- "Zuletzt aktualisiert am" sichtbar als <time datetime="..."> Element
-- Kein Elementor-Markup (Board R4: GenerateBlocks statt Elementor)
+WICHTIG: Der Output wird NICHT automatisch nach WordPress gepusht.
+Melanie kopiert die einzelnen Blöcke von Hand in Elementor.
+Daher: Strukturiere den Output als EINZELNE, KOPIERBARE BLÖCKE.
 
-OUTPUT: Nur HTML. Kein Markdown, kein erklärender Text.`;
+FORMAT — Jeder Block ist ein eigenständiger HTML-Abschnitt:
+Trenne jeden Block mit einem Kommentar: <!-- BLOCK: [Name] -->
+
+REGELN:
+- KEIN GenerateBlocks-Markup (wir nutzen Elementor)
+- Jeder Block = 1 kopierbarer HTML-Abschnitt für einen Elementor-HTML-Widget
+- Sauberes, minimales HTML ohne Framework-Klassen
+- SEMANTISCHES HTML: <article>, <section>, <nav>, <table>, <details>
+- Jede H2 bekommt id="..." (kebab-case)
+- Jede Sektion in <section id="...">
+- INHALTSVERZEICHNIS als <nav> mit <ol> und Anker-Links
+- FAQ als <details>/<summary> Accordion
+- Tabellen als echte <table> mit <thead>/<tbody>
+- Bilder als <img loading="lazy"> mit Platzhalter-src
+- "Zuletzt aktualisiert am" als <time datetime="...">
+- Schema.org JSON-LD als separater Block zum Kopieren
+- Inline-CSS nur wo nötig, kein externes Stylesheet
+- KEIN Sticky CTA (macht Melanie in Elementor selbst)
+
+BLOCK-REIHENFOLGE:
+<!-- BLOCK: Schema JSON-LD -->
+<!-- BLOCK: Hero -->
+<!-- BLOCK: Inhaltsverzeichnis -->
+<!-- BLOCK: [Jede H2-Sektion als eigener Block] -->
+<!-- BLOCK: Vergleichstabelle -->
+<!-- BLOCK: Preis-Tabelle -->
+<!-- BLOCK: FAQ Accordion -->
+<!-- BLOCK: Lokalkolorit -->
+<!-- BLOCK: CTA -->
+<!-- BLOCK: Autoren-Byline -->
+
+OUTPUT: Nur HTML-Blöcke mit Kommentar-Trennern. Kein Markdown, kein erklärender Text.`;
 
 function buildExportPrompt(gen) {
-  return `Konvertiere diesen Content in WordPress/GenerateBlocks-HTML.
+  return `Konvertiere diesen Content in kopierbare Elementor-HTML-Blöcke.
 
-WICHTIG — SEMANTISCHE STRUKTUR:
-- Wrap alles in <article>
-- TOC in <nav aria-label="Inhaltsverzeichnis">
-- Jede H2-Sektion in <section id="...">
-- Preise/Vergleiche als echte <table>
-- FAQ als <details>/<summary> mit id="faq-..."
-- Autoren-Byline + <time datetime="${new Date().toISOString().split('T')[0]}">Zuletzt aktualisiert am ${new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}</time>
+WICHTIG: Melanie kopiert jeden Block einzeln in ein Elementor-HTML-Widget.
+Trenne JEDEN Block mit: <!-- BLOCK: [Name] -->
 
 CONTENT (Markdown):
 ${gen.outputContent}
 
-SCHEMA (als <script> Block einbauen):
+SCHEMA (als eigener Block):
 ${JSON.stringify(gen.outputSchema, null, 2)}
 
 META:
@@ -358,13 +391,9 @@ Description: ${gen.outputMeta?.description}
 CTA-TEXT: ${gen.ctaText || 'Jetzt Termin buchen'}
 CTA-URL: /termin
 PREIS-RANGE: ${gen.priceRange || ''}
+Aktualisiert: <time datetime="${new Date().toISOString().split('T')[0]}">${new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}</time>
 
-Baue den Sticky Mobile CTA als letztes Element ein:
-<div class="hf-sticky-cta" style="position:fixed;bottom:0;left:0;right:0;z-index:999;background:#EE7E00;padding:12px;text-align:center;display:none;" id="stickyCta">
-  <a href="/termin" style="color:#fff;font-weight:700;text-decoration:none;font-size:16px;">${gen.ctaText || 'Jetzt Termin buchen'}</a>
-  <button onclick="this.parentElement.style.display='none'" style="position:absolute;right:8px;top:8px;background:none;border:none;color:#fff;font-size:18px;">✕</button>
-</div>
-<script>window.addEventListener('scroll',function(){document.getElementById('stickyCta').style.display=window.scrollY>400?'block':'none';})</script>`;
+Erstelle die Blöcke jetzt. Kein Sticky CTA (macht Melanie in Elementor).`;
 }
 
 module.exports = {
