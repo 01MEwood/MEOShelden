@@ -276,7 +276,7 @@ async function runGeneration(generationId, chunks) {
   const completion = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
     messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-    max_tokens: 6000, temperature: 0.7,
+    max_tokens: 12000, temperature: 0.7,
   });
 
   const outputContent = completion.choices[0].message.content;
@@ -376,7 +376,7 @@ async function runExport(generationId) {
       { role: 'system', content: PROMPTS.EXPORT_SYSTEM },
       { role: 'user', content: exportPrompt }
     ],
-    max_tokens: 6000, temperature: 0.2,
+    max_tokens: 12000, temperature: 0.2,
   });
 
   const exportHtml = completion.choices[0].message.content;
