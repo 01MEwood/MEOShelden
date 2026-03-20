@@ -70,24 +70,77 @@ function KnowledgeTab({ authFetch, stats }) {
   const [filter, setFilter] = useState('');
   const [embedding, setEmbedding] = useState(false);
   const [embedMsg, setEmbedMsg] = useState('');
+  const [editId, setEditId] = useState(null);
+  const [editData, setEditData] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [addMode, setAddMode] = useState(false);
+  const [newChunk, setNewChunk] = useState({ category: 'EXPERT_PRINCIPLE', subcategory: '', title: '', content: '' });
 
-  useEffect(() => {
-    authFetch('/api/knowledge?limit=200').then(d => d.success && setChunks(d.chunks)).catch(() => {});
-    authFetch('/api/knowledge/embed-status').then(d => d.success && setEmbedStatus(d)).catch(() => {});
-  }, []);
+  const CATEGORIES = ['EXPERT_PRINCIPLE', 'PAGE_TEMPLATE', 'SCHEMA_TEMPLATE', 'LOKALKOLORIT', 'BRAND_SETTINGS', 'PRODUCT_INFO', 'CUSTOMER_VOICE', 'CUSTOMER_REVIEW', 'FAQ_ITEM', 'REFERENCE_PROJECT', 'COMPETITOR_DATA'];
+
+  async function loadChunks() {
+    const d = await authFetch('/api/knowledge?limit=200');
+    if (d.success) setChunks(d.chunks);
+    const s = await authFetch('/api/knowledge/embed-status');
+    if (s.success) setEmbedStatus(s);
+  }
+
+  useEffect(() => { loadChunks(); }, []);
 
   async function handleEmbedAll() {
     setEmbedding(true); setEmbedMsg('');
     try {
       const d = await authFetch('/api/knowledge/embed-all', { method: 'POST' });
       setEmbedMsg(d.message || 'Gestartet...');
-      // Poll status every 5s
       const poll = setInterval(async () => {
         const s = await authFetch('/api/knowledge/embed-status');
-        if (s.success) { setEmbedStatus(s); if (s.missing === 0) { clearInterval(poll); setEmbedding(false); setEmbedMsg('✅ Alle Embeddings fertig!'); } }
+        if (s.success) { setEmbedStatus(s); if (s.missing === 0) { clearInterval(poll); setEmbedding(false); setEmbedMsg('✅ Alle Embeddings fertig!'); loadChunks(); } }
       }, 5000);
-      setTimeout(() => clearInterval(poll), 300000); // max 5 min
+      setTimeout(() => clearInterval(poll), 300000);
     } catch (e) { setEmbedMsg('Fehler: ' + e.message); setEmbedding(false); }
+  }
+
+  function startEdit(chunk) {
+    setEditId(chunk.id);
+    setEditData({ title: chunk.title, content: chunk.content, subcategory: chunk.subcategory || '' });
+  }
+
+  async function saveEdit() {
+    setSaving(true);
+    try {
+      const d = await authFetch(`/api/knowledge/${editId}`, {
+        method: 'PUT', body: JSON.stringify(editData),
+      });
+      if (d.success) {
+        setEditId(null);
+        setEmbedMsg('✅ Gespeichert + Embedding aktualisiert');
+        await loadChunks();
+      } else { alert('Fehler: ' + (d.error || 'Unbekannt')); }
+    } catch (e) { alert('Fehler: ' + e.message); }
+    setSaving(false);
+  }
+
+  async function deleteChunk(id, title) {
+    if (!confirm(`"${title}" wirklich löschen?`)) return;
+    await authFetch(`/api/knowledge/${id}`, { method: 'DELETE' });
+    await loadChunks();
+  }
+
+  async function addChunk() {
+    if (!newChunk.title || !newChunk.content) return alert('Titel und Inhalt sind Pflicht.');
+    setSaving(true);
+    try {
+      const d = await authFetch('/api/knowledge', {
+        method: 'POST', body: JSON.stringify(newChunk),
+      });
+      if (d.success) {
+        setAddMode(false);
+        setNewChunk({ category: 'EXPERT_PRINCIPLE', subcategory: '', title: '', content: '' });
+        setEmbedMsg('✅ Neuer Chunk erstellt + Embedding generiert');
+        await loadChunks();
+      } else { alert('Fehler: ' + (d.error || 'Unbekannt')); }
+    } catch (e) { alert('Fehler: ' + e.message); }
+    setSaving(false);
   }
 
   const categories = [...new Set(chunks.map(c => c.category))].sort();
@@ -95,7 +148,47 @@ function KnowledgeTab({ authFetch, stats }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="font-bold text-lg">🧠 RAG Knowledge Base</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="font-bold text-lg">🧠 RAG Knowledge Base</h2>
+        <button onClick={() => setAddMode(!addMode)}
+          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition">
+          {addMode ? '✕ Abbrechen' : '＋ Neuer Chunk'}
+        </button>
+      </div>
+
+      {/* Add New Chunk */}
+      {addMode && (
+        <div className="bg-green-50 rounded-xl border border-green-200 p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-600">Kategorie</label>
+              <select value={newChunk.category} onChange={e => setNewChunk(p => ({ ...p, category: e.target.value }))}
+                className="w-full border rounded-lg px-3 py-2 text-sm mt-1">
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Subcategory</label>
+              <input value={newChunk.subcategory} onChange={e => setNewChunk(p => ({ ...p, subcategory: e.target.value }))}
+                placeholder="z.B. dieter_rams, stuttgart" className="w-full border rounded-lg px-3 py-2 text-sm mt-1" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Titel</label>
+            <input value={newChunk.title} onChange={e => setNewChunk(p => ({ ...p, title: e.target.value }))}
+              placeholder="z.B. Dieter Rams — Gutes Design" className="w-full border rounded-lg px-3 py-2 text-sm mt-1" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Inhalt (wird für RAG-Retrieval genutzt)</label>
+            <textarea value={newChunk.content} onChange={e => setNewChunk(p => ({ ...p, content: e.target.value }))}
+              rows={5} placeholder="Der vollständige Wissens-Chunk..." className="w-full border rounded-lg px-3 py-2 text-sm mt-1 font-mono" />
+          </div>
+          <button onClick={addChunk} disabled={saving}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg">
+            {saving ? '⏳ Speichern...' : '✅ Chunk erstellen + Embedding generieren'}
+          </button>
+        </div>
+      )}
 
       {/* Embed Status Bar */}
       <div className="bg-white rounded-xl border p-4 flex flex-wrap items-center gap-4">
@@ -136,16 +229,54 @@ function KnowledgeTab({ authFetch, stats }) {
       {/* Chunk List */}
       <div className="space-y-2">
         {filtered.map(c => (
-          <div key={c.id} className="bg-white rounded-lg border p-3 flex items-start gap-3">
-            <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${c.hasEmbedding ? 'bg-green-500' : 'bg-red-400'}`} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">{c.category}</span>
-                {c.subcategory && <span className="text-xs text-gray-400">{c.subcategory}</span>}
+          <div key={c.id} className={`bg-white rounded-lg border p-3 ${editId === c.id ? 'border-orange-400 ring-2 ring-orange-100' : ''}`}>
+            {editId === c.id ? (
+              /* ── EDIT MODE ── */
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-medium">{c.category}</span>
+                  <input value={editData.subcategory} onChange={e => setEditData(p => ({ ...p, subcategory: e.target.value }))}
+                    placeholder="Subcategory" className="border rounded px-2 py-1 text-xs w-40" />
+                  <span className="ml-auto text-gray-400">Bearbeiten</span>
+                </div>
+                <input value={editData.title} onChange={e => setEditData(p => ({ ...p, title: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-medium" />
+                <textarea value={editData.content} onChange={e => setEditData(p => ({ ...p, content: e.target.value }))}
+                  rows={8} className="w-full border rounded-lg px-3 py-2 text-sm font-mono leading-relaxed" />
+                <div className="flex gap-2">
+                  <button onClick={saveEdit} disabled={saving}
+                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg">
+                    {saving ? '⏳...' : '💾 Speichern + Re-Embed'}
+                  </button>
+                  <button onClick={() => setEditId(null)} className="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">
+                    Abbrechen
+                  </button>
+                </div>
               </div>
-              <div className="font-medium text-sm mt-1 truncate">{c.title}</div>
-              <div className="text-xs text-gray-400 mt-0.5 line-clamp-2">{c.content?.slice(0, 200)}...</div>
-            </div>
+            ) : (
+              /* ── VIEW MODE ── */
+              <div className="flex items-start gap-3">
+                <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${c.hasEmbedding ? 'bg-green-500' : 'bg-red-400'}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">{c.category}</span>
+                    {c.subcategory && <span className="text-xs text-gray-400">{c.subcategory}</span>}
+                  </div>
+                  <div className="font-medium text-sm mt-1 truncate">{c.title}</div>
+                  <div className="text-xs text-gray-400 mt-0.5 line-clamp-2">{c.content?.slice(0, 200)}...</div>
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button onClick={() => startEdit(c)} title="Bearbeiten"
+                    className="p-1.5 rounded-lg hover:bg-orange-50 text-gray-400 hover:text-orange-600 transition">
+                    ✏️
+                  </button>
+                  <button onClick={() => deleteChunk(c.id, c.title)} title="Löschen"
+                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition">
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
         {filtered.length === 0 && <p className="text-gray-400 text-center py-8">Keine Chunks gefunden.</p>}
