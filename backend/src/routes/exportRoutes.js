@@ -12,7 +12,7 @@ router.post('/wordpress/:id', async (req, res) => {
     if (!gen.outputContent) return res.status(400).json({ error: 'Kein Content vorhanden. Erst Pipeline abschließen.' });
 
     // Clone Elementor template with new content
-    const elementorData = cloneTemplate(gen);
+    const elementorData = await cloneTemplate(gen);
 
     // Push to WordPress
     const result = await pushToWordPress(gen, elementorData);
@@ -56,7 +56,7 @@ router.post('/wordpress-city', async (req, res) => {
     }
 
     // Clone template + push to WordPress
-    const elementorData = cloneTemplate(gen);
+    const elementorData = await cloneTemplate(gen);
     const wpResult = await pushToWordPress(gen, elementorData);
 
     // Update generation
@@ -115,7 +115,7 @@ router.post('/wordpress-batch', async (req, res) => {
           });
 
           if (gen.outputContent) {
-            const elementorData = cloneTemplate(gen);
+            const elementorData = await cloneTemplate(gen);
             const wpResult = await pushToWordPress(gen, elementorData);
             await query(`UPDATE generations SET "wpPostId"=$1, "wpUrl"=$2, "updatedAt"=NOW() WHERE id=$3`,
               [wpResult.wpId, wpResult.wpUrl, gen.id]);
