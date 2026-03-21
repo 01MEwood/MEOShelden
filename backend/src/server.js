@@ -55,6 +55,7 @@ app.use('/api/cities', auth, require('./routes/cities'));
 app.use('/api/clusters', auth, require('./routes/clusters'));
 app.use('/api/board', auth, require('./routes/board'));
 app.use('/api/export', auth, require('./routes/exportRoutes'));
+app.use('/api/social', auth, require('./routes/socialRoutes'));
 app.use('/api/health-checks', auth, require('./routes/healthChecks'));
 app.use('/api/auth', require('./routes/authRoutes'));
 
