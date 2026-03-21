@@ -243,10 +243,21 @@ function findSectionWith(elements, test) {
 // ════════════════════════════════════
 
 async function cloneTemplate(generation) {
+  // ═══ GUARD: Pipeline-Content ist PFLICHT ═══
+  if (!generation.outputContent || generation.outputContent.length < 500) {
+    throw new Error('STOP: Kein Pipeline-Content vorhanden! Der Cloner darf NICHT ohne die 6-Stufen-Pipeline arbeiten. Erst Pipeline starten, dann pushen.');
+  }
+
+  const content = parseContent(generation.outputContent);
+  if (content.sections.length < 3) {
+    throw new Error(`STOP: Nur ${content.sections.length} Sektionen im Pipeline-Content. Mindestens 5 erwartet. Pipeline hat nicht genug Content generiert.`);
+  }
+
+  console.log(`\n🔧 Cloner: ${content.sections.length} Sektionen, ${content.faq.length} FAQ, H1: "${content.h1?.slice(0,40)}"`);
+
   const template = await getMaster();
   regenerateIds(template);
 
-  const content = parseContent(generation.outputContent || '');
   const meta = generation.outputMeta || {};
   const cityName = generation.targetCity || '';
   const cityNameCapitalized = cityName.charAt(0).toUpperCase() + cityName.slice(1);
@@ -272,96 +283,123 @@ async function cloneTemplate(generation) {
     allTexts[0].settings.editor = mdToHtml(content.intro);
   }
 
-  // ── Map content sections to template sections ──
-  const sectionMap = {};
-  for (const section of content.sections) {
-    if (!sectionMap[section.type]) sectionMap[section.type] = [];
-    sectionMap[section.type].push(section);
+  // ═══════════════════════════════════════════════════════════
+  // CONTENT INJECTION: Pipeline-Content füllt ALLE Sektionen
+  // Jede Template-Sektion mit H2 bekommt Pipeline-Content.
+  // Kein reines Find-Replace — echte neue Texte aus RAG-Chunks.
+  // ═══════════════════════════════════════════════════════════
+
+  const pipelineSections = content.sections.filter(s => s.title);
+  const usedIdx = new Set();
+
+  // Find best pipeline section for a template section
+  function findBest(headingText, expectedType) {
+    const ht = headingText.toLowerCase();
+    // 1. Exact type match (unused)
+    if (expectedType) {
+      for (let j = 0; j < pipelineSections.length; j++) {
+        if (!usedIdx.has(j) && pipelineSections[j].type === expectedType) {
+          usedIdx.add(j); return pipelineSections[j];
+        }
+      }
+    }
+    // 2. Keyword overlap
+    const htWords = new Set(ht.replace(/[^a-zäöüß\s]/g, '').split(/\s+/).filter(w => w.length > 3));
+    let bestJ = -1, bestScore = 0;
+    for (let j = 0; j < pipelineSections.length; j++) {
+      if (usedIdx.has(j)) continue;
+      const pw = new Set(pipelineSections[j].title.toLowerCase().replace(/[^a-zäöüß\s]/g, '').split(/\s+/).filter(w => w.length > 3));
+      let score = 0;
+      for (const w of htWords) { if (pw.has(w)) score++; }
+      if (score > bestScore) { bestScore = score; bestJ = j; }
+    }
+    if (bestJ >= 0 && bestScore >= 1) { usedIdx.add(bestJ); return pipelineSections[bestJ]; }
+    // 3. Next unused (sequential)
+    for (let j = 0; j < pipelineSections.length; j++) {
+      if (!usedIdx.has(j)) { usedIdx.add(j); return pipelineSections[j]; }
+    }
+    return null;
   }
 
-  // Find template sections by analyzing their headings
-  // Track which pipeline sections have been used (avoid double-mapping)
-  const usedSections = new Set();
+  // Type detector from heading text
+  function detectType(ht) {
+    ht = ht.toLowerCase();
+    if (ht.includes('warum') && (ht.includes('schreiner') || ht.includes('konfigurator'))) return 'differenzierung';
+    if (ht.includes('warum') && ht.includes('dachschräge')) return 'pain';
+    if (ht.includes('herausforderung') || ht.includes('ungenutzt')) return 'pain';
+    if (ht.includes('lösung') || ht.includes('maßgefertigt')) return 'solution';
+    if (ht.includes('erfahrung') || ht.includes('kunden') || ht.includes('referenz')) return 'testimonials';
+    if (ht.includes('vergleich') || ht.includes(' vs')) return 'vergleich';
+    if (ht.includes('preis') || ht.includes('kostet')) return 'preise';
+    if (ht.includes('faq') || ht.includes('fragen') || ht.includes('häufig')) return 'faq';
+    if (ht.includes('lokalkolorit') || ht.includes('schreiner für') || ht.includes('und wir') || ht.includes('qualität')) return 'lokalkolorit';
+    if (ht.includes('termin') || ht.includes('jetzt') || ht.includes('planen')) return 'cta';
+    if (ht.includes('planungstermin') || ht.includes('video') || ht.includes('online-termin')) return 'videocall';
+    return null;
+  }
 
+  // Inject content into template
+  function injectContent(sectionEl, matched) {
+    const headings = findWidgets([sectionEl], 'heading');
+    const texts = findWidgets([sectionEl], 'text-editor');
+    const htmlWidgets = findWidgets([sectionEl], 'html').filter(w => !(w.settings?.html || '').includes('ld+json'));
+    const accordions = findWidgets([sectionEl], 'accordion');
+    const toggles = findWidgets([sectionEl], 'toggle');
+
+    // Replace heading
+    if (headings.length > 0) headings[0].settings.title = matched.title;
+
+    // Replace text content
+    if (texts.length > 0) {
+      if (matched.body.includes('|') && matched.body.includes('---')) {
+        const tableHtml = tableToHtml(matched.body);
+        const parts = matched.body.split(/\|.+\|\n\|[-|\s]+\|\n(?:\|.+\|\n?)+/);
+        texts[0].settings.editor = mdToHtml(parts[0] || '') + (parts[1] ? mdToHtml(parts[1]) : '');
+        if (htmlWidgets.length > 0) htmlWidgets[0].settings.html = tableHtml;
+      } else {
+        texts[0].settings.editor = mdToHtml(matched.body);
+      }
+      // Clear remaining text widgets (prevent old content leak)
+      for (let t = 1; t < texts.length; t++) {
+        const old = texts[t].settings?.editor || '';
+        // Don't clear CTA microcopy or short design-text
+        if (old.length > 200) texts[t].settings.editor = '';
+      }
+    }
+
+    // Replace FAQ accordion
+    if (matched.type === 'faq' && content.faq.length > 0) {
+      const acc = accordions[0] || toggles[0];
+      if (acc) {
+        acc.settings.tabs = content.faq.map(faq => ({
+          _id: eid(),
+          tab_title: faq.question,
+          tab_content: `<p>${faq.answer.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`,
+        }));
+      }
+    }
+  }
+
+  // Walk ALL template sections
   for (let i = 0; i < template.length; i++) {
     const headings = findWidgets([template[i]], 'heading');
-    const texts = findWidgets([template[i]], 'text-editor');
-    const htmlWidgets = findWidgets([template[i]], 'html');
-    const accordions = findWidgets([template[i]], 'accordion');
-    const toggles = findWidgets([template[i]], 'toggle');
-
     if (headings.length === 0) continue;
+    const headingText = headings[0].settings?.title || '';
+    const tag = headings[0].settings?.header_size || 'h2';
+    if (tag === 'h1') continue; // H1 already handled
 
-    const headingText = (headings[0].settings?.title || '').toLowerCase();
-
-    // Match template heading to content section type
-    let matched = null;
-    if (headingText.includes('warum') && (headingText.includes('schreiner') || headingText.includes('konfigurator'))) {
-      matched = sectionMap.differenzierung?.[0] || sectionMap.vergleich?.[0];
-    } else if (headingText.includes('warum') && headingText.includes('dachschräge')) {
-      // "Warum ein Dachschrägenschrank?" → replace with pain or intro
-      matched = sectionMap.pain?.[0] || sectionMap.text?.[0];
-    } else if (headingText.includes('herausforderung') || headingText.includes('ungenutzt')) {
-      matched = sectionMap.pain?.[0];
-    } else if (headingText.includes('lösung') || headingText.includes('maßgefertigt')) {
-      matched = sectionMap.solution?.[0];
-    } else if (headingText.includes('erfahrung') || headingText.includes('kunden') || headingText.includes('referenz')) {
-      matched = sectionMap.testimonials?.[0];
-    } else if (headingText.includes('vergleich') || headingText.includes('vs')) {
-      matched = sectionMap.vergleich?.[0];
-    } else if (headingText.includes('preis') || headingText.includes('kostet')) {
-      matched = sectionMap.preise?.[0];
-    } else if (headingText.includes('faq') || headingText.includes('fragen') || headingText.includes('häufig')) {
-      matched = sectionMap.faq?.[0];
-    } else if (headingText.includes('lokalkolorit') || headingText.includes('schreiner für') || headingText.includes('und wir') || headingText.includes('qualität aus')) {
-      matched = sectionMap.lokalkolorit?.[0];
-    } else if (headingText.includes('termin') || headingText.includes('jetzt') || headingText.includes('planen')) {
-      matched = sectionMap.cta?.[0];
-    } else if (headingText.includes('planungstermin') || headingText.includes('video') || headingText.includes('online-termin')) {
-      matched = sectionMap.videocall?.[0];
-    } else if (headingText.includes('stauraum') || headingText.includes('ordnung') || headingText.includes('flexible')) {
-      // Features 3-column section → match remaining text sections
-      const remaining = content.sections.filter(s => s.type === 'text' && !usedSections.has(s.title));
-      if (remaining.length > 0) matched = remaining[0];
-    }
-
-    // Track used sections to avoid double-mapping
-    if (matched) usedSections.add(matched.title);
+    const expectedType = detectType(headingText);
+    const matched = findBest(headingText, expectedType);
 
     if (matched) {
-      // Replace heading
-      headings[0].settings.title = matched.title;
-
-      // Replace body text
-      if (texts.length > 0) {
-        const bodyHtml = mdToHtml(matched.body);
-        // If body has table, split
-        if (matched.body.includes('|') && matched.body.includes('---')) {
-          const tableHtml = tableToHtml(matched.body);
-          const textParts = matched.body.split(/\|.+\|\n\|[-|\s]+\|\n(?:\|.+\|\n?)+/);
-          texts[0].settings.editor = mdToHtml(textParts[0] || '');
-          // If there's an HTML widget, put table there
-          if (htmlWidgets.length > 0) {
-            htmlWidgets[0].settings.html = tableHtml;
-          }
-        } else {
-          texts[0].settings.editor = bodyHtml;
-        }
-      }
-
-      // Replace FAQ accordion
-      if (matched.type === 'faq' && content.faq.length > 0) {
-        const accWidget = accordions[0] || toggles[0];
-        if (accWidget) {
-          accWidget.settings.tabs = content.faq.map((faq, idx) => ({
-            _id: eid(),
-            tab_title: faq.question,
-            tab_content: `<p>${faq.answer.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`,
-          }));
-        }
-      }
+      injectContent(template[i], matched);
+      console.log(`  📝 [${i}] "${headingText.slice(0,35)}" → "${matched.title.slice(0,35)}" (${matched.type})`);
+    } else {
+      console.log(`  ⚪ [${i}] "${headingText.slice(0,35)}" — kein Pipeline-Match`);
     }
   }
+
+  console.log(`  📊 Pipeline: ${usedIdx.size}/${pipelineSections.length} Sektionen injected`);
 
   // ── Replace CTA button texts ──
   const buttons = findWidgets(template, 'button');
