@@ -450,5 +450,5 @@ async function runFullPipeline({ generationId, pageType, primaryKeyword, targetC
 
 module.exports = {
   runFullPipeline, runIntelligence, runStrategy, runRetrieval, runGeneration,
-  runBoardReview, runExport, createEmbedding,
+  runBoardReview, runExport, createEmbedding, getOpenAI,
 };
