@@ -444,13 +444,48 @@ async function cloneTemplate(generation) {
     }
   }
 
-  // ── Replace Schema JSON-LD ──
+  // ── Replace Schema JSON-LD (Full 10-Block Stack) ──
   const htmlWidgets = findWidgets(template, 'html');
   const schemaWidget = htmlWidgets.find(w =>
     (w.settings?.html || '').includes('application/ld+json') || (w.settings?.html || '').includes('schema')
   );
   if (schemaWidget && generation.outputSchema) {
-    schemaWidget.settings.html = `<script type="application/ld+json">${JSON.stringify(generation.outputSchema, null, 2)}</script>`;
+    const schema = typeof generation.outputSchema === 'string'
+      ? JSON.parse(generation.outputSchema) : generation.outputSchema;
+
+    if (schema.htmlScript) {
+      // New format: deterministischer Generator mit htmlScript (multiple <script> tags)
+      schemaWidget.settings.html = schema.htmlScript;
+      console.log(`📋 Schema: ${schema.summary?.schemaCount || '?'} JSON-LD Blöcke injiziert (${schema.summary?.types?.join(', ') || '?'})`);
+    } else if (Array.isArray(schema)) {
+      // Legacy: Array of schema objects from old GPT-4o call
+      schemaWidget.settings.html = schema
+        .map(b => `<script type="application/ld+json">\n${JSON.stringify(b, null, 2)}\n</script>`)
+        .join('\n');
+      console.log(`📋 Schema: ${schema.length} JSON-LD Blöcke injiziert (Legacy-Format)`);
+    } else {
+      // Legacy: Single schema object
+      schemaWidget.settings.html = `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>`;
+      console.log('📋 Schema: 1 JSON-LD Block injiziert (Legacy-Format)');
+    }
+  } else if (!schemaWidget && generation.outputSchema) {
+    // Kein Schema-Widget im Template → als neues HTML-Widget am Ende einfügen
+    const schema = typeof generation.outputSchema === 'string'
+      ? JSON.parse(generation.outputSchema) : generation.outputSchema;
+    const schemaHtml = schema.htmlScript
+      || (Array.isArray(schema)
+        ? schema.map(b => `<script type="application/ld+json">\n${JSON.stringify(b, null, 2)}\n</script>`).join('\n')
+        : `<script type="application/ld+json">\n${JSON.stringify(schema, null, 2)}\n</script>`);
+
+    // Append as last element in the template
+    template.push({
+      id: eid(),
+      elType: 'widget',
+      widgetType: 'html',
+      settings: { html: schemaHtml },
+      elements: [],
+    });
+    console.log('📋 Schema: Neues HTML-Widget am Seitenende eingefügt');
   }
 
   // ── Replace byline date ──
