@@ -19,6 +19,7 @@ function getOpenAI() {
 const PROMPTS = require('../prompts/heldenformel');
 const { fetchSERP, fetchKeywordVolumes, fetchOnPage } = require('./dataforseo');
 const { fetchGSCData } = require('./gsc');
+const { generateSchemaStack } = require('./schema-generator');
 
 // ══════════════════════════════════════════
 // STUFE 1: INTELLIGENCE
@@ -310,15 +311,34 @@ Schreibe NICHT "In ${city.name} gibt es viele Wohnsituationen" — schreibe KONK
 
   let outputSchema = null;
   try {
-    const sc = await getOpenAI().chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: PROMPTS.SCHEMA_SYSTEM },
-        { role: 'user', content: PROMPTS.buildSchemaPrompt(gen, outputContent) }
-      ],
-      max_tokens: 3000, temperature: 0.2,
-    });
-    outputSchema = JSON.parse(sc.choices[0].message.content.replace(/```json\n?|```/g, '').trim());
+    // Deterministic Schema Generator — kein GPT-4o Call, spart ~$0.02/Seite
+    const city = gen.targetCity
+      ? await queryOne('SELECT * FROM city_profiles WHERE slug = $1', [gen.targetCity])
+      : null;
+
+    if (city) {
+      // FAQs aus dem generierten Content extrahieren
+      const faqRegex = /###\s+(.+?)(?:\s*\{#[^}]+\})?\n([\s\S]*?)(?=###\s|## |$)/g;
+      const extractedFaqs = [];
+      let faqMatch;
+      while ((faqMatch = faqRegex.exec(outputContent))) {
+        const q = faqMatch[1].trim();
+        const a = faqMatch[2].trim().replace(/\*\*/g, '').replace(/\n+/g, ' ').slice(0, 500);
+        if (q.endsWith('?') && a.length > 20) {
+          extractedFaqs.push({ question: q, answer: a });
+        }
+      }
+
+      const schemaResult = generateSchemaStack({
+        city,
+        pageType: gen.pageType,
+        targetProduct: gen.targetProduct || 'Dachschrägenschrank',
+        faqs: extractedFaqs.length > 0 ? extractedFaqs : undefined,  // undefined → Default-FAQs
+      });
+
+      outputSchema = schemaResult;  // { blocks, htmlScript, summary }
+      console.log(`✅ Schema: ${schemaResult.summary.schemaCount} Blöcke, ${schemaResult.summary.faqCount} FAQs (deterministisch, $0.00)`);
+    }
   } catch (e) { console.error('Schema gen failed:', e.message); }
 
   let outputMeta = {};
