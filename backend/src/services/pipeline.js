@@ -266,12 +266,38 @@ async function runGeneration(generationId, chunks) {
   const gen = await queryOne('SELECT * FROM generations WHERE id = $1', [generationId]);
   const startTime = Date.now();
 
+  // ═══ CITY PROFILE DATA → GPT-4o Context ═══
+  let cityContext = '';
+  if (gen.targetCity) {
+    const city = await queryOne('SELECT * FROM city_profiles WHERE slug = $1', [gen.targetCity]);
+    if (city) {
+      cityContext = `\n--- STADT-PROFIL: ${city.name} ---
+Einwohner: ${city.einwohner?.toLocaleString('de-DE') || '?'}
+Entfernung von Murrhardt: ${city.entfernungKm || '?'} km, ${city.fahrtzeitMin || '?'} Min Fahrzeit
+Kaufkraft-Index: ${city.kaufkraftIndex || '?'}
+Tier: ${city.tier} (1=Kernmarkt, 2=Erweiterung, 3=Potenzial)
+Stadtteile: ${(city.stadtteile || []).join(', ') || 'Keine Daten'}
+Typische Wohntypen: ${(city.wohntypen || []).join(', ') || 'Keine Daten'}
+Typische Probleme: ${(city.painPoints || []).join(', ') || 'Keine Daten'}
+Lokaler Bezug: ${city.lokalkolorit || 'Keine Daten'}
+Besonderer USP: ${city.uniqueValueAdd || 'Keine Daten'}
+---
+WICHTIG: Nutze diese Daten! Einwohner, Stadtteile, Entfernung, Wohntypen MÜSSEN im Text vorkommen.
+Schreibe NICHT "In ${city.name} gibt es viele Wohnsituationen" — schreibe KONKRET:
+"In ${(city.stadtteile || [])[0] || city.name} stehen die typischen ${(city.wohntypen || ['Einfamilienhäuser'])[0]} aus den 70ern — mit Dachschrägen die nach Stauraum schreien."
+`;
+    }
+  }
+
   const contextBlocks = chunks.map((c, i) =>
     `--- CHUNK ${i + 1} [${c.category}${c.subcategory ? ':' + c.subcategory : ''}] (${((c.similarity || 0) * 100).toFixed(0)}%) ---\n${c.content}`
   ).join('\n\n');
 
+  // Combine city data + RAG chunks
+  const fullContext = cityContext + '\n\n' + contextBlocks;
+
   const systemPrompt = PROMPTS.buildSystemPrompt(gen);
-  const userPrompt = PROMPTS.buildUserPrompt(gen, contextBlocks);
+  const userPrompt = PROMPTS.buildUserPrompt(gen, fullContext);
 
   const completion = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
@@ -366,32 +392,12 @@ async function runBoardReview(generationId) {
 // STUFE 6: EXPORT
 // ══════════════════════════════════════════
 
+// STUFE 6: EXPORT — ENTFÄLLT
+// Elementor-Cloner übernimmt direkt beim WordPress-Push.
+// Kein extra GPT-4o Call, spart ~$0.02 pro Seite.
 async function runExport(generationId) {
-  const gen = await queryOne('SELECT * FROM generations WHERE id = $1', [generationId]);
-  const exportPrompt = PROMPTS.buildExportPrompt(gen);
-
-  const completion = await getOpenAI().chat.completions.create({
-    model: 'gpt-4o',
-    messages: [
-      { role: 'system', content: PROMPTS.EXPORT_SYSTEM },
-      { role: 'user', content: exportPrompt }
-    ],
-    max_tokens: 12000, temperature: 0.2,
-  });
-
-  const exportHtml = completion.choices[0].message.content;
-
-  await query(
-    `UPDATE generations SET status='EXPORTED', "exportHtml"=$1, "exportFormat"='generateblocks', "updatedAt"=NOW() WHERE id=$2`,
-    [exportHtml, generationId]
-  );
-
-  try {
-    const r = await fetch('https://schreinerhelden.de/termin');
-    if ((await r.text()).includes('Lorem ipsum')) console.warn('⚠️ /termin hat Lorem Ipsum!');
-  } catch (e) { /* not critical */ }
-
-  return { exportHtml };
+  await query(`UPDATE generations SET status='APPROVED', "updatedAt"=NOW() WHERE id=$1`, [generationId]);
+  return { skipped: true, reason: 'Elementor-Cloner übernimmt' };
 }
 
 // ══════════════════════════════════════════
@@ -429,7 +435,11 @@ async function runFullPipeline({ generationId, pageType, primaryKeyword, targetC
     }
 
     const gf = await queryOne('SELECT "boardPass" FROM generations WHERE id = $1', [generationId]);
-    if (gf.boardPass) await runExport(generationId);
+    if (gf.boardPass) {
+      // Export-Stufe übersprungen — Elementor-Cloner übernimmt beim WordPress-Push
+      await query(`UPDATE generations SET status='APPROVED', "updatedAt"=NOW() WHERE id=$1`, [generationId]);
+      console.log('✅ Board bestanden → Bereit für WordPress-Push (Elementor-Cloner)');
+    }
 
     const result = await queryOne('SELECT * FROM generations WHERE id = $1', [generationId]);
     const cu = await queryAll(
