@@ -63,6 +63,436 @@ const STATUS_LABELS = {
   REJECTED: '❌ Abgelehnt', EXPORTED: '📦 Exportiert', PUBLISHED: '🌐 Live',
 };
 
+// ── Social Content Tab ──
+function SocialTab({ authFetch }) {
+  const [generations, setGenerations] = useState([]);
+  const [selectedGen, setSelectedGen] = useState(null);
+  const [social, setSocial] = useState({});
+  const [generating, setGenerating] = useState(false);
+  const [genChannel, setGenChannel] = useState(null);
+
+  async function loadGenerations() {
+    const d = await authFetch('/api/pipeline?limit=20&status=APPROVED,EXPORTED,PUBLISHED,REJECTED');
+    if (d.data) setGenerations(d.data.filter(g => g.outputContent));
+  }
+
+  async function loadSocial(genId) {
+    const d = await authFetch(`/api/social/content/${genId}`);
+    if (d.success) setSocial(d.social || {});
+  }
+
+  async function selectGen(gen) {
+    setSelectedGen(gen);
+    setSocial({});
+    await loadSocial(gen.id);
+  }
+
+  async function generateChannel(channel) {
+    if (!selectedGen) return;
+    setGenChannel(channel); setGenerating(true);
+    try {
+      const d = await authFetch(`/api/social/generate/${selectedGen.id}`, {
+        method: 'POST', body: JSON.stringify({ channel }),
+      });
+      if (d.success) {
+        setSocial(prev => ({ ...prev, [channel]: { content: d.content, parsed: d.parsed, createdAt: new Date().toISOString() } }));
+      } else alert(d.error);
+    } catch (e) { alert(e.message); }
+    setGenerating(false); setGenChannel(null);
+  }
+
+  async function generateAll() {
+    if (!selectedGen) return;
+    setGenerating(true); setGenChannel('all');
+    try {
+      const d = await authFetch(`/api/social/bulk/${selectedGen.id}`, { method: 'POST' });
+      if (d.success) {
+        const newSocial = {};
+        for (const [ch, data] of Object.entries(d.results)) {
+          newSocial[ch] = { content: data.raw, parsed: data.parsed, createdAt: new Date().toISOString() };
+        }
+        setSocial(newSocial);
+      } else alert(d.error);
+    } catch (e) { alert(e.message); }
+    setGenerating(false); setGenChannel(null);
+  }
+
+  useEffect(() => { loadGenerations(); }, []);
+
+  const CHANNELS = [
+    { id: 'gbp', name: 'Google Business', icon: '📍', color: 'blue' },
+    { id: 'instagram', name: 'Instagram / Facebook', icon: '📸', color: 'pink' },
+    { id: 'pinterest', name: 'Pinterest', icon: '📌', color: 'red' },
+    { id: 'blog', name: 'Blog-Artikel', icon: '📝', color: 'green' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-bold text-lg">📢 Social Content Multiplier</h2>
+        {selectedGen && (
+          <button onClick={generateAll} disabled={generating}
+            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg">
+            {generating && genChannel === 'all' ? '⏳ Generiert alle...' : '🚀 Alle 4 Kanäle generieren'}
+          </button>
+        )}
+      </div>
+
+      {/* Generation Picker */}
+      <div className="bg-white rounded-xl border p-4">
+        <label className="text-sm font-medium text-gray-700">Landingpage auswählen:</label>
+        <select onChange={e => { const g = generations.find(g => g.id === e.target.value); if (g) selectGen(g); }}
+          value={selectedGen?.id || ''} className="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
+          <option value="">— Generierung wählen —</option>
+          {generations.map(g => (
+            <option key={g.id} value={g.id}>
+              {g.targetCity ? `${g.targetCity} — ` : ''}{g.primaryKeyword} ({g.outputMeta?.wordCount || '?'}W, {new Date(g.createdAt).toLocaleDateString('de-DE')})
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {!selectedGen && (
+        <div className="bg-white rounded-xl border p-12 text-center text-gray-400">
+          <p className="text-4xl mb-3">📢</p>
+          <p className="font-medium">Wähle eine Landingpage aus dem Dropdown</p>
+          <p className="text-sm mt-1">Dann generiere Social Content für alle 4 Kanäle auf einmal</p>
+        </div>
+      )}
+
+      {/* Channel Cards */}
+      {selectedGen && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {CHANNELS.map(ch => {
+            const data = social[ch.id];
+            const isGenerating = generating && (genChannel === ch.id || genChannel === 'all');
+            return (
+              <div key={ch.id} className="bg-white rounded-xl border overflow-hidden">
+                <div className="flex items-center justify-between p-3 border-b bg-gray-50">
+                  <span className="font-bold text-sm">{ch.icon} {ch.name}</span>
+                  <div className="flex gap-1">
+                    {data && (
+                      <button onClick={() => navigator.clipboard.writeText(data.content || '').then(() => alert('Kopiert!'))}
+                        className="px-2 py-1 bg-gray-200 rounded text-xs hover:bg-gray-300">📋</button>
+                    )}
+                    <button onClick={() => generateChannel(ch.id)} disabled={isGenerating}
+                      className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs hover:bg-orange-200 disabled:opacity-50">
+                      {isGenerating ? '⏳' : '🔄'} {isGenerating ? 'Läuft...' : data ? 'Neu' : 'Generieren'}
+                    </button>
+                  </div>
+                </div>
+                <div className="p-3">
+                  {isGenerating && !data && (
+                    <div className="text-center py-8 text-gray-400">
+                      <div className="animate-pulse text-2xl mb-2">⏳</div>
+                      <p className="text-sm">Generiert {ch.name}...</p>
+                    </div>
+                  )}
+                  {data ? (
+                    <div>
+                      <pre className="text-xs text-gray-700 whitespace-pre-wrap max-h-64 overflow-y-auto font-sans leading-relaxed">{data.content}</pre>
+                      {data.parsed && (
+                        <details className="mt-2">
+                          <summary className="text-xs text-gray-400 cursor-pointer">Strukturierte Daten</summary>
+                          <pre className="text-xs bg-gray-50 p-2 mt-1 rounded overflow-auto max-h-32">{JSON.stringify(data.parsed, null, 2)}</pre>
+                        </details>
+                      )}
+                      <div className="text-xs text-gray-300 mt-2">{data.createdAt ? new Date(data.createdAt).toLocaleString('de-DE') : ''}</div>
+                    </div>
+                  ) : !isGenerating && (
+                    <div className="text-center py-6 text-gray-300">
+                      <p className="text-sm">Noch nicht generiert</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Users Management Tab ──
+function UsersTab({ authFetch, currentUser }) {
+  const [users, setUsers] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'team' });
+
+  async function loadUsers() {
+    const d = await authFetch('/api/auth/users');
+    if (d.success) setUsers(d.users);
+  }
+
+  useEffect(() => { loadUsers(); }, []);
+
+  function resetForm() { setForm({ name: '', email: '', password: '', role: 'team' }); setShowForm(false); setEditId(null); }
+
+  async function handleSubmit() {
+    if (!form.name || !form.email) return alert('Name und Email sind Pflicht.');
+    if (!editId && !form.password) return alert('Passwort ist Pflicht für neue Benutzer.');
+
+    if (editId) {
+      const body = { name: form.name, role: form.role };
+      if (form.password) body.password = form.password;
+      const d = await authFetch(`/api/auth/users/${editId}`, { method: 'PUT', body: JSON.stringify(body) });
+      if (d.success) { resetForm(); loadUsers(); } else alert(d.error);
+    } else {
+      const d = await authFetch('/api/auth/users', { method: 'POST', body: JSON.stringify(form) });
+      if (d.success) { resetForm(); loadUsers(); } else alert(d.error);
+    }
+  }
+
+  async function handleDelete(id, name) {
+    if (!confirm(`"${name}" wirklich löschen? Das kann nicht rückgängig gemacht werden.`)) return;
+    const d = await authFetch(`/api/auth/users/${id}`, { method: 'DELETE' });
+    if (d.success) loadUsers(); else alert(d.error);
+  }
+
+  function startEdit(u) {
+    setEditId(u.id);
+    setForm({ name: u.name, email: u.email, password: '', role: u.role });
+    setShowForm(true);
+  }
+
+  const ROLE_LABELS = { admin: '🔑 Admin', team: '👤 Team', viewer: '👁️ Viewer' };
+  const ROLE_COLORS = { admin: 'bg-orange-100 text-orange-700', team: 'bg-blue-100 text-blue-700', viewer: 'bg-gray-100 text-gray-600' };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-bold text-lg">👥 Benutzer verwalten</h2>
+        {currentUser?.role === 'admin' && (
+          <button onClick={() => { resetForm(); setShowForm(!showForm); }}
+            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg">
+            {showForm ? '✕ Abbrechen' : '＋ Neuer Benutzer'}
+          </button>
+        )}
+      </div>
+
+      {/* Create/Edit Form */}
+      {showForm && (
+        <div className="bg-white rounded-xl border p-4 space-y-3">
+          <h3 className="font-bold text-sm">{editId ? '✏️ Benutzer bearbeiten' : '＋ Neuen Benutzer anlegen'}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-500">Name *</label>
+              <input value={form.name} onChange={e => setForm({...form, name: e.target.value})}
+                placeholder="Mario Esch" className="w-full border rounded-lg px-3 py-2 text-sm mt-1" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500">Email *</label>
+              <input value={form.email} onChange={e => setForm({...form, email: e.target.value})}
+                placeholder="mario@schreinerhelden.de" disabled={!!editId}
+                className={`w-full border rounded-lg px-3 py-2 text-sm mt-1 ${editId ? 'bg-gray-50' : ''}`} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500">Passwort {editId ? '(leer = unverändert)' : '*'}</label>
+              <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})}
+                placeholder={editId ? '••••••••' : 'Passwort vergeben'}
+                className="w-full border rounded-lg px-3 py-2 text-sm mt-1" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500">Rolle</label>
+              <select value={form.role} onChange={e => setForm({...form, role: e.target.value})}
+                className="w-full border rounded-lg px-3 py-2 text-sm mt-1">
+                <option value="admin">🔑 Admin — Volle Rechte</option>
+                <option value="team">👤 Team — Pipeline + Export</option>
+                <option value="viewer">👁️ Viewer — Nur lesen</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={handleSubmit}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg">
+              {editId ? '💾 Speichern' : '＋ Anlegen'}
+            </button>
+            <button onClick={resetForm} className="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      {/* User List */}
+      <div className="space-y-2">
+        {users.map(u => (
+          <div key={u.id} className="bg-white rounded-xl border p-4 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-400">
+              {u.name?.charAt(0)?.toUpperCase() || '?'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-sm flex items-center gap-2">
+                {u.name}
+                {u.id === currentUser?.id && <span className="text-xs text-gray-400">(Du)</span>}
+              </div>
+              <div className="text-xs text-gray-400">{u.email}</div>
+            </div>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${ROLE_COLORS[u.role] || ROLE_COLORS.viewer}`}>
+              {ROLE_LABELS[u.role] || u.role}
+            </span>
+            <div className="text-xs text-gray-300">
+              {u.createdAt ? new Date(u.createdAt).toLocaleDateString('de-DE') : ''}
+            </div>
+            {currentUser?.role === 'admin' && (
+              <div className="flex gap-1">
+                <button onClick={() => startEdit(u)}
+                  className="p-2 hover:bg-gray-100 rounded-lg text-sm" title="Bearbeiten">✏️</button>
+                {u.id !== currentUser?.id && (
+                  <button onClick={() => handleDelete(u.id, u.name)}
+                    className="p-2 hover:bg-red-50 rounded-lg text-sm" title="Löschen">🗑️</button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+        {users.length === 0 && (
+          <div className="bg-white rounded-xl border p-8 text-center text-gray-400">
+            <p className="text-2xl mb-2">👥</p>
+            <p className="text-sm">Keine Benutzer gefunden.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Role explanation */}
+      <div className="bg-gray-50 rounded-xl border p-4">
+        <h3 className="text-sm font-bold text-gray-500 mb-2">Rollen-Übersicht</h3>
+        <div className="grid grid-cols-3 gap-3 text-xs">
+          <div><span className="font-bold text-orange-600">🔑 Admin</span><br/>Alles: Pipeline, Export, WordPress-Push, Benutzer verwalten, Knowledge bearbeiten</div>
+          <div><span className="font-bold text-blue-600">👤 Team</span><br/>Pipeline starten, Export, WordPress-Push, Knowledge lesen</div>
+          <div><span className="font-bold text-gray-500">👁️ Viewer</span><br/>Nur lesen: Verlauf ansehen, Städte-Status prüfen</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── WordPress Batch Tab ──
+function WordPressTab({ authFetch, cities }) {
+  const [wpStatus, setWpStatus] = useState(null);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchMsg, setBatchMsg] = useState('');
+  const [selectedTier, setSelectedTier] = useState('');
+
+  async function loadStatus() {
+    const d = await authFetch('/api/export/wordpress-status');
+    if (d.success) setWpStatus(d);
+  }
+
+  useEffect(() => { loadStatus(); }, []);
+
+  async function runBatch() {
+    if (!confirm(`Batch starten: ${selectedTier ? `Tier ${selectedTier}` : 'ALLE 18'} Städte generieren + als Elementor-Draft nach WordPress pushen?\n\nDas dauert ca. ${selectedTier ? '5-10' : '20-40'} Minuten.`)) return;
+    setBatchRunning(true); setBatchMsg('');
+    try {
+      const body = selectedTier ? { tier: parseInt(selectedTier) } : {};
+      const d = await authFetch('/api/export/wordpress-batch', { method: 'POST', body: JSON.stringify(body) });
+      setBatchMsg(d.message || 'Batch gestartet...');
+      // Poll status every 30s
+      const poll = setInterval(async () => {
+        await loadStatus();
+      }, 30000);
+      // Stop polling after 45 min
+      setTimeout(() => { clearInterval(poll); setBatchRunning(false); loadStatus(); }, 2700000);
+    } catch (e) { setBatchMsg('Fehler: ' + e.message); setBatchRunning(false); }
+  }
+
+  async function pushSingle(slug) {
+    if (!confirm(`${slug} generieren + nach WordPress pushen?`)) return;
+    setBatchMsg(`⏳ ${slug} wird generiert...`);
+    try {
+      const d = await authFetch('/api/export/wordpress-city', {
+        method: 'POST', body: JSON.stringify({ citySlug: slug }),
+      });
+      setBatchMsg(d.success ? `✅ ${d.city}: Draft erstellt (${d.wordCount} Wörter)` : `❌ ${d.error}`);
+      await loadStatus();
+    } catch (e) { setBatchMsg('Fehler: ' + e.message); }
+  }
+
+  const STATUS_ICON = {
+    'PUBLISHED': '🟢', 'EXPORTED': '🟡', 'APPROVED': '🟡',
+    'REJECTED': '🔴', 'NICHT GENERIERT': '⚪',
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-bold text-lg">🌐 WordPress Batch-Push</h2>
+        <div className="flex items-center gap-2">
+          <select value={selectedTier} onChange={e => setSelectedTier(e.target.value)}
+            className="border rounded-lg px-3 py-2 text-sm">
+            <option value="">Alle 18 Städte</option>
+            <option value="1">Tier 1 ({cities.filter(c => c.tier === 1).length} Städte)</option>
+            <option value="2">Tier 2 ({cities.filter(c => c.tier === 2).length} Städte)</option>
+            <option value="3">Tier 3 ({cities.filter(c => c.tier === 3).length} Städte)</option>
+          </select>
+          <button onClick={runBatch} disabled={batchRunning}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg">
+            {batchRunning ? '⏳ Batch läuft...' : '🚀 Batch starten'}
+          </button>
+        </div>
+      </div>
+
+      {batchMsg && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">{batchMsg}</div>
+      )}
+
+      {/* Status Overview */}
+      {wpStatus && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white rounded-xl border p-4 text-center">
+            <div className="text-2xl font-bold text-gray-900">{wpStatus.total}</div>
+            <div className="text-xs text-gray-500">Städte gesamt</div>
+          </div>
+          <div className="bg-white rounded-xl border p-4 text-center">
+            <div className="text-2xl font-bold text-green-600">{wpStatus.generated}</div>
+            <div className="text-xs text-gray-500">Content generiert</div>
+          </div>
+          <div className="bg-white rounded-xl border p-4 text-center">
+            <div className="text-2xl font-bold text-blue-600">{wpStatus.pushed}</div>
+            <div className="text-xs text-gray-500">WordPress Drafts</div>
+          </div>
+        </div>
+      )}
+
+      {/* City List */}
+      {wpStatus?.cities && (
+        <div className="space-y-2">
+          {[1,2,3].map(tier => (
+            <div key={tier}>
+              <h3 className="font-bold text-sm text-gray-500 mt-3 mb-2">{'⭐'.repeat(Math.max(0,4-tier))} Tier {tier}</h3>
+              {wpStatus.cities.filter(c => c.tier === tier).map(c => (
+                <div key={c.slug} className="bg-white rounded-lg border p-3 flex items-center gap-3">
+                  <span className="text-lg">{STATUS_ICON[c.status] || '⚪'}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm">{c.city}</div>
+                    <div className="text-xs text-gray-400">
+                      /schreiner-{c.slug}
+                      {c.wordCount ? ` · ${c.wordCount}W` : ''}
+                      {c.boardPass !== null ? ` · Board: ${c.boardPass ? '✅' : '❌'}` : ''}
+                    </div>
+                  </div>
+                  {c.wpDraft ? (
+                    <a href={c.wpUrl} target="_blank" rel="noopener"
+                      className="px-3 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full hover:bg-green-200">
+                      📄 Draft öffnen
+                    </a>
+                  ) : (
+                    <button onClick={() => pushSingle(c.slug)}
+                      className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full hover:bg-blue-200">
+                      🚀 Generieren + Pushen
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Knowledge Tab Component ──
 function KnowledgeTab({ authFetch, stats }) {
   const [chunks, setChunks] = useState([]);
@@ -302,6 +732,7 @@ export default function App() {
   const [product, setProduct] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentGen, setCurrentGen] = useState(null);
+  const [socialResults, setSocialResults] = useState(null);
   const [generations, setGenerations] = useState([]);
   const [selectedGen, setSelectedGen] = useState(null);
 
@@ -363,9 +794,12 @@ export default function App() {
   // ── TABS ──
   const tabs = [
     { id: 'pipeline', label: '🚀 Pipeline', desc: 'Keyword+Ort → Fertige Seite' },
+    { id: 'wordpress', label: '🌐 WordPress', desc: 'Batch-Push alle Städte' },
+    { id: 'social', label: '📢 Social', desc: 'GBP · Insta · Pinterest · Blog' },
     { id: 'history', label: '📋 Verlauf', desc: 'Alle Generierungen' },
     { id: 'cities', label: '🏙️ Städte', desc: 'Ort-Profile & Priorisierung' },
     { id: 'knowledge', label: '🧠 Wissen', desc: 'RAG Knowledge Base' },
+    { id: 'users', label: '👥 Benutzer', desc: 'Zugänge verwalten' },
     { id: 'health', label: '🏥 Health', desc: 'Monitoring & Checks' },
   ];
 
@@ -570,18 +1004,55 @@ export default function App() {
                     </details>
                   )}
 
-                  {/* Export HTML */}
-                  {currentGen.exportHtml && (
+                  {/* WordPress Export */}
+                  {currentGen.outputContent && (
                     <div className="flex gap-2">
-                      <button onClick={() => navigator.clipboard.writeText(currentGen.exportHtml)}
+                      <button onClick={() => navigator.clipboard.writeText(currentGen.outputContent).then(() => alert('✅ Markdown kopiert!'))}
                         className="flex-1 border rounded-lg py-2 text-sm font-medium hover:bg-gray-50">
-                        📋 HTML kopieren
+                        📋 Markdown kopieren
                       </button>
-                      <button onClick={() => authFetch(`/api/export/wordpress/${currentGen.id}`, { method: 'POST' }).then(d => alert(d.success ? `✅ WordPress Draft erstellt: ${d.wpUrl}` : d.error))}
+                      <button onClick={async () => {
+                        if (!confirm(`Seite als Elementor-Draft nach WordPress pushen?`)) return;
+                        const d = await authFetch(`/api/export/wordpress/${currentGen.id}`, { method: 'POST' });
+                        alert(d.success ? `✅ WordPress Draft erstellt!\n\n📄 ${d.title}\n🔗 ${d.wpUrl}\n📊 Slug: /${d.slug}` : `❌ Fehler: ${d.error}`);
+                      }}
                         className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700">
-                        🌐 Nach WordPress pushen (Draft)
+                        🚀 → WordPress Elementor (Draft)
                       </button>
                     </div>
+                  )}
+
+                  {/* Social Content Bulk */}
+                  {currentGen.outputContent && (
+                    <button onClick={async () => {
+                      const d = await authFetch(`/api/social/bulk/${currentGen.id}`, { method: 'POST' });
+                      if (d.success) {
+                        setSocialResults(d.results);
+                        alert('✅ Social Content für alle 4 Kanäle generiert! Wechsle zum Social-Tab für Details.');
+                      } else alert('❌ ' + d.error);
+                    }}
+                      className="w-full border-2 border-dashed border-orange-300 rounded-lg py-2 text-sm font-medium text-orange-600 hover:bg-orange-50">
+                      📢 Social Content generieren (GBP · Insta · Pinterest · Blog)
+                    </button>
+                  )}
+
+                  {/* Inline Social Results */}
+                  {socialResults && Object.keys(socialResults).length > 0 && (
+                    <details className="bg-orange-50 rounded-xl border border-orange-200">
+                      <summary className="p-3 cursor-pointer text-sm font-medium text-orange-700">📢 {Object.keys(socialResults).length} Social-Kanäle generiert</summary>
+                      <div className="p-3 space-y-3">
+                        {Object.entries(socialResults).map(([ch, data]) => (
+                          <div key={ch} className="bg-white rounded-lg border p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-bold text-sm">{ch === 'gbp' ? '📍 Google Business' : ch === 'instagram' ? '📸 Instagram' : ch === 'pinterest' ? '📌 Pinterest' : '📝 Blog'}</span>
+                              <button onClick={() => navigator.clipboard.writeText(data.raw || data.content || '').then(() => alert('Kopiert!'))}
+                                className="px-2 py-1 bg-gray-100 rounded text-xs hover:bg-gray-200">📋 Kopieren</button>
+                            </div>
+                            <pre className="text-xs text-gray-600 whitespace-pre-wrap max-h-40 overflow-y-auto">{(data.raw || data.content || '').slice(0, 500)}{(data.raw || '').length > 500 ? '...' : ''}</pre>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
                   )}
 
                   {/* Chunks Used */}
@@ -682,8 +1153,17 @@ export default function App() {
           </div>
         )}
 
+        {/* ═══ WORDPRESS TAB ═══ */}
+        {tab === 'wordpress' && <WordPressTab authFetch={authFetch} cities={cities} />}
+
         {/* ═══ KNOWLEDGE TAB ═══ */}
         {tab === 'knowledge' && <KnowledgeTab authFetch={authFetch} stats={stats} />}
+
+        {/* ═══ SOCIAL TAB ═══ */}
+        {tab === 'social' && <SocialTab authFetch={authFetch} />}
+
+        {/* ═══ USERS TAB ═══ */}
+        {tab === 'users' && <UsersTab authFetch={authFetch} currentUser={user} />}
 
         {/* ═══ HEALTH TAB ═══ */}
         {tab === 'health' && (
