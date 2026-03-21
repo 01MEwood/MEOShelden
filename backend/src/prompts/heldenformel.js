@@ -143,20 +143,25 @@ PFLICHT-BLÖCKE (Board-Approved + AI-Citation-Optimiert):
 1. Hero-Absatz mit H1 = Primär-Keyword
 2. INHALTSVERZEICHNIS: "Auf dieser Seite" mit Anker-Links zu allen H2s
 3. Unique Value Add für ${city} (200+ Wörter, NUR auf dieser Seite)
-4. Differenzierungs-Block "Warum eine echte Schreinerei statt Online-Konfigurator?" {#warum-schreinerei}
+4. Differenzierung: H2 = "Warum eine echte Schreinerei statt Online-Konfigurator?" {#warum-schreinerei}
 5. Vergleichstabelle als echte Markdown-Tabelle (Schreinerhelden vs. Online-Konfigurator, 5+ Zeilen)
-6. Preis-Transparenz als TABELLE: Schranktyp | Standard | Premium | Inklusive {#preise-${city || 'region'}}
-7. Video-Call-Erklärung (1 Satz)
-8. FAQ mit 5-6 stadtspezifischen Fragen — JEDE als H3 mit {#faq-...} Anker, Antwort beginnt mit **1-Satz-Fazit**
-9. Lokalkolorit-Block für ${city} {#schreiner-${city || 'region'}}
+6. Preis-Transparenz: H2 = "Was kostet ein Einbauschrank in ${city}?" {#preise-${city || 'region'}} — als TABELLE
+7. Video-Call-Erklärung (1 Absatz, kein eigener H2 — in Lösung einbauen)
+8. FAQ: H2 = "Häufige Fragen zu Einbauschränken in ${city}" — 5-6 Fragen als H3, Antwort mit **1-Satz-Fazit**
+9. Stadt-Block: H2 = "Dein Schreiner für ${city} — von [Stadtteil] bis [Stadtteil]" {#schreiner-${city || 'region'}} — schwäbisch, 150+ Wörter
 10. Kontextueller CTA: "${gen.ctaText}"
 11. Autoren-Byline + "Zuletzt aktualisiert am ${new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}"
 
-AI-CITATION-PFLICHT:
-- Jede H2 muss als eigenständiger Antwort-Baustein funktionieren
-- H2s als Fragen formulieren wo möglich: "Was kostet ein Einbauschrank in ${city}?" statt "Preise"
-- Alle Daten in Tabellen, nicht im Fließtext
-- FAQ-Antworten: erst **1-Satz-Fazit fett**, dann Detail
+═══ H2-ÜBERSCHRIFTEN-REGELN (WICHTIG!) ═══
+H2s sind für den KUNDEN, nicht für die interne Gliederung!
+VERBOTEN in H2s: "Lokalkolorit", "Differenzierung", "Pain", "Solution", "Unique Value Add", "CTA", "Hero"
+RICHTIG: Fragen oder Statements aus Kundenperspektive:
+- FALSCH: "Lokalkolorit: Stuttgart" → RICHTIG: "Dein Schreiner für Stuttgart — Qualität aus dem Remstal"
+- FALSCH: "Unsere Leistungen" → RICHTIG: "Was bekommst du bei einem Schreiner in ${city}?"
+- FALSCH: "Differenzierung" → RICHTIG: "Warum eine echte Schreinerei statt Online-Konfigurator?"
+- FALSCH: "Preisgestaltung" → RICHTIG: "Was kostet ein Einbauschrank in ${city}?"
+- FALSCH: "Kundenstimmen" → RICHTIG: "Das sagen unsere Kunden aus ${city}"
+═══ ENDE H2-REGELN ═══
 
 INTERNE LINKS (natürlich einbauen):
 ${(strategy.internalLinks || []).map(l => `- ${l.url} (${l.anchor})`).join('\n')}
@@ -240,12 +245,14 @@ Prüfe den Content durch ALLE 12 Perspektiven. Sei STRENG.
 Gib für jeden PASS ✅, WARNING ⚠️, oder FAIL ❌ mit 1-Satz-Begründung.
 
 ═══ AUTOMATISCHE FAIL-REGELN (nicht verhandelbar) ═══
-- Wortanzahl unter ZIEL-WORTANZAHL → Eli Schwartz gibt automatisch ❌ FAIL
-- Wortanzahl unter 90% des Ziels → GESAMTES Board gibt FAIL
 - Testimonials mit Jahreszahlen → Joanna Wiebe gibt ❌ FAIL
 - Kein Inhaltsverzeichnis → Lily Ray gibt ❌ FAIL
 - H2s ohne Anker-IDs → Lily Ray gibt ❌ FAIL
-═══ ENDE AUTOMATISCHE FAIL-REGELN ═══
+═══ WORTANZAHL-BEWERTUNG ═══
+- Wortanzahl unter Ziel → Eli Schwartz gibt ⚠️ WARNING (nicht FAIL)
+- Wortanzahl unter 70% des Ziels → Eli Schwartz gibt ❌ FAIL
+- Die anderen Experten bewerten UNABHÄNGIG von der Wortanzahl — nur Inhaltsqualität!
+═══ ENDE REGELN ═══
 
 Die 10 Experten:
 1. Eli Schwartz — Duplicate/Doorway-Check: ≥40% unique? Variable Struktur?
@@ -306,11 +313,12 @@ AI-CITATION-PRÜFPUNKTE:
 - FAQ-Antworten mit 1-Satz-Fazit?
 - "Zuletzt aktualisiert" sichtbar?
 
-WORTANZAHL-CHECK (AUTOMATISCHER FAIL):
+WORTANZAHL-CHECK:
 Die Ziel-Wortanzahl ist ${gen.targetWordCount || 1500}.
 Die tatsächliche Wortanzahl ist ${gen.outputMeta?.wordCount || '?'}.
-Wenn die tatsächliche Wortanzahl UNTER dem Ziel liegt → Eli Schwartz MUSS ❌ FAIL geben.
-Wenn die tatsächliche Wortanzahl unter 90% des Ziels liegt → ALLE Experten MÜSSEN ❌ FAIL geben.
+Wenn unter Ziel → Eli Schwartz gibt ⚠️ WARNING.
+Wenn unter 70% des Ziels → Eli Schwartz gibt ❌ FAIL.
+Die ANDEREN 9 Experten bewerten NUR die Inhaltsqualität, NICHT die Wortanzahl!
 
 TESTIMONIAL-CHECK:
 Wenn Testimonials Jahreszahlen enthalten (2023, 2024, 2025 etc.) → Joanna Wiebe MUSS ❌ FAIL geben.
