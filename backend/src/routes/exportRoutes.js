@@ -1,45 +1,185 @@
 const express = require('express');
 const router = express.Router();
-const { query, queryOne } = require('../db');
+const { query, queryOne, queryAll } = require('../db');
+const { cloneTemplate, pushToWordPress } = require('../services/elementor-cloner');
+const pipeline = require('../services/pipeline');
 
-// Push to WordPress
+// Push single generation to WordPress as Elementor page
 router.post('/wordpress/:id', async (req, res) => {
   try {
     const gen = await queryOne('SELECT * FROM generations WHERE id = $1', [req.params.id]);
-    if (!gen?.exportHtml) return res.status(400).json({ error: 'Export-HTML nicht vorhanden. Erst Pipeline abschließen.' });
+    if (!gen) return res.status(404).json({ error: 'Generation nicht gefunden.' });
+    if (!gen.outputContent) return res.status(400).json({ error: 'Kein Content vorhanden. Erst Pipeline abschließen.' });
 
-    const wpUrl = process.env.WP_URL || 'https://schreinerhelden.de';
-    const wpUser = process.env.WP_USER;
-    const wpAppPassword = process.env.WP_APP_PASSWORD;
-    if (!wpUser || !wpAppPassword) return res.status(400).json({ error: 'WordPress-Credentials nicht konfiguriert.' });
+    // Clone Elementor template with new content
+    const elementorData = cloneTemplate(gen);
 
-    const slug = gen.pageType === 'ORTS_LP' && gen.targetCity
-      ? `schreiner-${gen.targetCity}`
-      : gen.primaryKeyword.toLowerCase().replace(/\s+/g, '-').replace(/[äöüß]/g, m => ({ä:'ae',ö:'oe',ü:'ue',ß:'ss'})[m]);
+    // Push to WordPress
+    const result = await pushToWordPress(gen, elementorData);
 
-    const wpRes = await fetch(`${wpUrl}/wp-json/wp/v2/pages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Basic ' + Buffer.from(`${wpUser}:${wpAppPassword}`).toString('base64'),
-      },
-      body: JSON.stringify({
-        title: gen.outputMeta?.title || gen.primaryKeyword,
-        slug, content: gen.exportHtml, status: 'draft',
-      })
-    });
-    if (!wpRes.ok) throw new Error(`WordPress API: ${wpRes.status} ${await wpRes.text()}`);
-    const wpData = await wpRes.json();
-
+    // Update generation record
     await query(
       `UPDATE generations SET "wpPostId"=$1, "wpUrl"=$2, status='PUBLISHED', "updatedAt"=NOW() WHERE id=$3`,
-      [wpData.id, wpData.link, gen.id]
+      [result.wpId, result.wpUrl, gen.id]
     );
-    res.json({ success: true, wpId: wpData.id, wpUrl: wpData.link, slug });
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Batch: Generate + Push for a single city
+router.post('/wordpress-city', async (req, res) => {
+  try {
+    const { citySlug, primaryKeyword, targetProduct } = req.body;
+    if (!citySlug) return res.status(400).json({ error: 'citySlug ist Pflicht.' });
+
+    const city = await queryOne('SELECT * FROM city_profiles WHERE slug = $1', [citySlug]);
+    if (!city) return res.status(404).json({ error: `Stadt ${citySlug} nicht gefunden.` });
+
+    const keyword = primaryKeyword || `Schreiner ${city.name} Einbauschrank`;
+    const product = targetProduct || 'Dachschrägenschrank';
+
+    // Run full pipeline
+    console.log(`\n🚀 Pipeline für ${city.name} gestartet...`);
+    const gen = await pipeline.runFullPipeline({
+      pageType: 'ORTS_LP',
+      primaryKeyword: keyword,
+      targetCity: citySlug,
+      targetProduct: product,
+      userId: req.user?.id,
+    });
+
+    if (!gen.outputContent) {
+      return res.json({ success: false, city: city.name, error: 'Pipeline hat keinen Content generiert', status: gen.status });
+    }
+
+    // Clone template + push to WordPress
+    const elementorData = cloneTemplate(gen);
+    const wpResult = await pushToWordPress(gen, elementorData);
+
+    // Update generation
+    await query(
+      `UPDATE generations SET "wpPostId"=$1, "wpUrl"=$2, "updatedAt"=NOW() WHERE id=$3`,
+      [wpResult.wpId, wpResult.wpUrl, gen.id]
+    );
+
+    console.log(`✅ ${city.name}: Draft erstellt → ${wpResult.wpUrl}`);
+    res.json({ success: true, city: city.name, generation: gen.id, wordCount: gen.outputMeta?.wordCount, boardPass: gen.boardPass, ...wpResult });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Batch: Generate + Push for ALL cities (or selected tier)
+router.post('/wordpress-batch', async (req, res) => {
+  try {
+    const { tier, cities: selectedCities, targetProduct } = req.body;
+    const product = targetProduct || 'Dachschrägenschrank';
+
+    // Get cities to process
+    let cities;
+    if (selectedCities && Array.isArray(selectedCities)) {
+      cities = await queryAll(`SELECT * FROM city_profiles WHERE slug = ANY($1) ORDER BY "priorityScore" DESC`, [selectedCities]);
+    } else if (tier) {
+      cities = await queryAll(`SELECT * FROM city_profiles WHERE tier = $1 ORDER BY "priorityScore" DESC`, [tier]);
+    } else {
+      cities = await queryAll(`SELECT * FROM city_profiles ORDER BY "priorityScore" DESC`);
+    }
+
+    if (cities.length === 0) return res.status(400).json({ error: 'Keine Städte gefunden.' });
+
+    // Return immediately, process in background
+    res.json({
+      success: true,
+      message: `Batch gestartet: ${cities.length} Städte werden generiert und nach WordPress gepusht.`,
+      cities: cities.map(c => c.name),
+      total: cities.length,
+    });
+
+    // Background processing
+    (async () => {
+      const results = [];
+      for (const city of cities) {
+        try {
+          const keyword = `Schreiner ${city.name} Einbauschrank`;
+          console.log(`\n🏙️  [${results.length + 1}/${cities.length}] Pipeline: ${city.name}...`);
+
+          const gen = await pipeline.runFullPipeline({
+            pageType: 'ORTS_LP',
+            primaryKeyword: keyword,
+            targetCity: city.slug,
+            targetProduct: product,
+            userId: 'batch',
+          });
+
+          if (gen.outputContent) {
+            const elementorData = cloneTemplate(gen);
+            const wpResult = await pushToWordPress(gen, elementorData);
+            await query(`UPDATE generations SET "wpPostId"=$1, "wpUrl"=$2, "updatedAt"=NOW() WHERE id=$3`,
+              [wpResult.wpId, wpResult.wpUrl, gen.id]);
+            results.push({ city: city.name, success: true, wpId: wpResult.wpId, wordCount: gen.outputMeta?.wordCount, boardPass: gen.boardPass });
+            console.log(`  ✅ ${city.name}: Draft → ${wpResult.wpUrl} (${gen.outputMeta?.wordCount}W)`);
+          } else {
+            results.push({ city: city.name, success: false, error: 'Kein Content', status: gen.status });
+            console.log(`  ❌ ${city.name}: Kein Content (Status: ${gen.status})`);
+          }
+
+          // Pause between cities to not overload OpenAI
+          await new Promise(r => setTimeout(r, 5000));
+        } catch (e) {
+          results.push({ city: city.name, success: false, error: e.message });
+          console.log(`  ❌ ${city.name}: ${e.message}`);
+        }
+      }
+
+      const succeeded = results.filter(r => r.success).length;
+      console.log(`\n📊 Batch fertig: ${succeeded}/${cities.length} Städte erfolgreich nach WordPress gepusht.\n`);
+    })();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get batch status (check which cities have WP drafts)
+router.get('/wordpress-status', async (req, res) => {
+  try {
+    const cities = await queryAll(`SELECT * FROM city_profiles ORDER BY "priorityScore" DESC`);
+    const generations = await queryAll(
+      `SELECT "targetCity", status, "wpPostId", "wpUrl", "outputMeta", "boardPass", "createdAt"
+       FROM generations WHERE "pageType"='ORTS_LP' AND "targetCity" IS NOT NULL
+       ORDER BY "createdAt" DESC`
+    );
+
+    // Group by city, take latest
+    const byCityMap = {};
+    for (const g of generations) {
+      if (!byCityMap[g.targetCity]) byCityMap[g.targetCity] = g;
+    }
+
+    const status = cities.map(c => ({
+      city: c.name,
+      slug: c.slug,
+      tier: c.tier,
+      hasGeneration: !!byCityMap[c.slug],
+      wpDraft: byCityMap[c.slug]?.wpPostId ? true : false,
+      wpId: byCityMap[c.slug]?.wpPostId || null,
+      wpUrl: byCityMap[c.slug]?.wpUrl || null,
+      wordCount: byCityMap[c.slug]?.outputMeta?.wordCount || null,
+      boardPass: byCityMap[c.slug]?.boardPass || null,
+      status: byCityMap[c.slug]?.status || 'NICHT GENERIERT',
+    }));
+
+    const total = cities.length;
+    const generated = status.filter(s => s.hasGeneration).length;
+    const pushed = status.filter(s => s.wpDraft).length;
+
+    res.json({ success: true, total, generated, pushed, cities: status });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Get export HTML
+// Get export HTML (legacy)
 router.get('/html/:id', async (req, res) => {
   try {
     const gen = await queryOne('SELECT "exportHtml" FROM generations WHERE id = $1', [req.params.id]);
