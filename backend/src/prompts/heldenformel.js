@@ -168,7 +168,20 @@ ${(strategy.internalLinks || []).map(l => `- ${l.url} (${l.anchor})`).join('\n')
 
 ⚠️ ERINNERUNG: Dein Text MUSS mindestens ${gen.targetWordCount} Wörter haben.
 Schreibe JEDEN Abschnitt ausführlich mit 150-200 Wörtern. NICHT abkürzen.
-Wenn du fertig bist, zähle die Wörter. Unter ${gen.targetWordCount}? → Mehr schreiben.`;
+Wenn du fertig bist, zähle die Wörter. Unter ${gen.targetWordCount}? → Mehr schreiben.
+
+═══ ANTI-DUPLICATE-CONTENT (KRITISCH!) ═══
+Wir erstellen 18 Orts-Landingpages. JEDE Seite muss ≥60% einzigartigen Text haben.
+VERBOTEN: Generische Absätze die auf jede Stadt passen.
+PFLICHT für JEDE Sektion:
+- Nenne mindestens 2 Teilorte/Stadtteile von ${city} (aus dem Lokalkolorit-Chunk)
+- Baue spezifische Wohnsituationen der Stadt ein (Altbau, Neubau, Reihenhaus — je nach Stadt)
+- Der Pain-Block muss ein konkretes Szenario aus ${city} beschreiben
+- Die Lösung muss Bezug auf die Entfernung Murrhardt → ${city} nehmen
+- Testimonials: "aus ${city}" oder "aus der Region ${city}" anfügen
+- FAQ: Mindestens 2 Fragen mit explizitem ${city}-Bezug
+- KEIN Satz darf 1:1 auf einer anderen Orts-LP stehen können!
+═══ ENDE ANTI-DUPLICATE ═══`;
 
   } else if (gen.pageType === 'PRODUCT_PAGE') {
     prompt = `Erstelle/optimiere die Produktseite für "${product}".
@@ -248,10 +261,15 @@ Gib für jeden PASS ✅, WARNING ⚠️, oder FAIL ❌ mit 1-Satz-Begründung.
 - Testimonials mit Jahreszahlen → Joanna Wiebe gibt ❌ FAIL
 - Kein Inhaltsverzeichnis → Lily Ray gibt ❌ FAIL
 - H2s ohne Anker-IDs → Lily Ray gibt ❌ FAIL
+- Generische Texte OHNE Stadtbezug (Teilorte, lokale Szenarien) → Eli Schwartz gibt ❌ FAIL
 ═══ WORTANZAHL-BEWERTUNG ═══
 - Wortanzahl unter Ziel → Eli Schwartz gibt ⚠️ WARNING (nicht FAIL)
 - Wortanzahl unter 70% des Ziels → Eli Schwartz gibt ❌ FAIL
 - Die anderen Experten bewerten UNABHÄNGIG von der Wortanzahl — nur Inhaltsqualität!
+═══ DUPLICATE-CONTENT-CHECK (Eli Schwartz prüft) ═══
+- Zähle: Wie oft wird der Stadtname oder ein Teilort namentlich genannt? Mindestens 8x!
+- Zähle: Wie viele Sätze könnten 1:1 auf einer anderen Stadt-LP stehen? Mehr als 30% → ❌ FAIL
+- Gibt es ein konkretes lokales Szenario (z.B. "Altbau in [Stadtteil]")? Wenn nein → ⚠️ WARNING
 ═══ ENDE REGELN ═══
 
 Die 10 Experten:
