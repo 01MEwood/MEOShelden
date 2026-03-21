@@ -189,4 +189,92 @@ router.get('/html/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ════════════════════════════════════
+// SCHEMA.ORG PREVIEW & BATCH EXPORT
+// ════════════════════════════════════
+
+const { generateSchemaStack } = require('../services/schema-generator');
+
+// Preview schema stack for a single city (no pipeline needed)
+router.get('/schema-preview/:citySlug', async (req, res) => {
+  try {
+    const city = await queryOne('SELECT * FROM city_profiles WHERE slug = $1', [req.params.citySlug]);
+    if (!city) return res.status(404).json({ error: `Stadt ${req.params.citySlug} nicht gefunden.` });
+
+    const product = req.query.product || 'Dachschrägenschrank';
+    const result = generateSchemaStack({ city, pageType: 'ORTS_LP', targetProduct: product });
+
+    if (req.query.format === 'html') {
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(`<!DOCTYPE html><html><head><title>Schema: ${city.name}</title>${result.htmlScript}</head><body><h1>Schema.org für ${city.name}</h1><p>${result.summary.schemaCount} Blöcke: ${result.summary.types.join(', ')}</p><pre>${JSON.stringify(result.blocks, null, 2)}</pre></body></html>`);
+    }
+
+    res.json({ success: true, city: city.name, ...result });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Batch: Generate schema for ALL cities
+router.get('/schema-batch', async (req, res) => {
+  try {
+    const tier = req.query.tier ? parseInt(req.query.tier) : null;
+    const cities = tier
+      ? await queryAll('SELECT * FROM city_profiles WHERE tier = $1 ORDER BY "priorityScore" DESC', [tier])
+      : await queryAll('SELECT * FROM city_profiles ORDER BY "priorityScore" DESC');
+
+    const product = req.query.product || 'Dachschrägenschrank';
+    const results = cities.map(city => {
+      try {
+        const schema = generateSchemaStack({ city, pageType: 'ORTS_LP', targetProduct: product });
+        return { city: city.name, slug: city.slug, tier: city.tier, success: true, ...schema.summary };
+      } catch (e) {
+        return { city: city.name, slug: city.slug, success: false, error: e.message };
+      }
+    });
+
+    const succeeded = results.filter(r => r.success).length;
+    res.json({
+      success: true,
+      total: cities.length,
+      generated: succeeded,
+      totalSchemaBlocks: results.reduce((sum, r) => sum + (r.schemaCount || 0), 0),
+      cities: results,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Validate schema of an existing generation
+router.get('/schema-validate/:id', async (req, res) => {
+  try {
+    const gen = await queryOne('SELECT "outputSchema", "targetCity" FROM generations WHERE id = $1', [req.params.id]);
+    if (!gen) return res.status(404).json({ error: 'Generation nicht gefunden.' });
+
+    const schema = typeof gen.outputSchema === 'string' ? JSON.parse(gen.outputSchema) : gen.outputSchema;
+    const checks = [];
+
+    if (!schema) {
+      checks.push({ check: 'Schema vorhanden', pass: false, detail: 'Kein Schema generiert' });
+      return res.json({ success: true, valid: false, checks });
+    }
+
+    // Check for new format (has htmlScript)
+    const isNewFormat = !!schema.htmlScript;
+    checks.push({ check: 'Format', pass: isNewFormat, detail: isNewFormat ? 'Neuer deterministischer Generator' : 'Legacy GPT-4o Format' });
+
+    const blocks = schema.blocks || (Array.isArray(schema) ? schema : [schema]);
+    checks.push({ check: 'Block-Anzahl', pass: blocks.length >= 5, detail: `${blocks.length} Blöcke` });
+
+    const types = blocks.map(b => Array.isArray(b['@type']) ? b['@type'][0] : b['@type']);
+    const requiredTypes = ['Organization', 'Person', 'FAQPage', 'Product'];
+    if (gen.targetCity) requiredTypes.push('LocalBusiness');
+
+    for (const rt of requiredTypes) {
+      const found = types.some(t => t && t.includes(rt));
+      checks.push({ check: `${rt} vorhanden`, pass: found, detail: found ? '✅' : '❌ FEHLT' });
+    }
+
+    const allPass = checks.every(c => c.pass);
+    res.json({ success: true, valid: allPass, checks, blockCount: blocks.length, types });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
