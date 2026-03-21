@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ── USERS ──
 CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE NOT NULL,
   password TEXT NOT NULL,
   name TEXT NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- ── KNOWLEDGE CHUNKS ──
 CREATE TABLE IF NOT EXISTS knowledge_chunks (
-  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
   category TEXT NOT NULL,
   subcategory TEXT,
   title TEXT NOT NULL,
@@ -48,7 +48,7 @@ WITH (m = 16, ef_construction = 64);
 
 -- ── CITY PROFILES ──
 CREATE TABLE IF NOT EXISTS city_profiles (
-  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT UNIQUE NOT NULL,
   slug TEXT UNIQUE NOT NULL,
   tier INT NOT NULL,
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS city_profiles (
 
 -- ── GENERATIONS ──
 CREATE TABLE IF NOT EXISTS generations (
-  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
   "pageType" TEXT NOT NULL,
   status TEXT DEFAULT 'INTELLIGENCE',
   "layoutVariant" TEXT,
@@ -121,7 +121,7 @@ CREATE INDEX IF NOT EXISTS idx_gen_created ON generations ("createdAt");
 
 -- ── CHUNK USAGE ──
 CREATE TABLE IF NOT EXISTS chunk_usage (
-  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
   "generationId" TEXT NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
   "chunkId" TEXT NOT NULL,
   "relevanceScore" FLOAT,
@@ -132,7 +132,7 @@ CREATE INDEX IF NOT EXISTS idx_cu_gen ON chunk_usage ("generationId");
 
 -- ── CLUSTER MAP ──
 CREATE TABLE IF NOT EXISTS cluster_map (
-  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
   "pillarSlug" TEXT UNIQUE NOT NULL,
   "pillarTitle" TEXT NOT NULL,
   "clusterSlugs" TEXT[] DEFAULT '{}',
@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS cluster_map (
 
 -- ── PUBLICATION CHECKS ──
 CREATE TABLE IF NOT EXISTS publication_checks (
-  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
   "generationId" TEXT NOT NULL,
   "pageUrl" TEXT NOT NULL,
   "checkType" TEXT NOT NULL,
@@ -155,6 +155,19 @@ CREATE TABLE IF NOT EXISTS publication_checks (
 
 CREATE INDEX IF NOT EXISTS idx_pc_gen ON publication_checks ("generationId");
 CREATE INDEX IF NOT EXISTS idx_pc_type ON publication_checks ("checkType");
+
+-- ── SOCIAL CONTENT ──
+CREATE TABLE IF NOT EXISTS social_content (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "generationId" TEXT NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
+  channel TEXT NOT NULL,
+  content TEXT,
+  "parsedData" JSONB,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE("generationId", channel)
+);
+
+CREATE INDEX IF NOT EXISTS idx_social_gen ON social_content ("generationId");
 
 -- ── WEIGHTED SEARCH FUNCTION (RAG) ──
 CREATE OR REPLACE FUNCTION search_weighted(
