@@ -22,7 +22,7 @@ So erreichst du ${minWords}+ Wörter:
 - Vergleichstabelle + Einleitung: 100+ Wörter
 - Preis-Sektion: 120+ Wörter (Tabelle + erklärender Text)
 - Jede FAQ-Antwort: 60-100 Wörter (nicht nur 1 Satz!)
-- Lokalkolorit: 150+ Wörter (konkrete Details zur Stadt)
+- Stadt-Block: 150+ Wörter (konkrete Details zur Stadt)
 - Testimonials: 3 Stück à 40-60 Wörter
 
 Schreibe AUSFÜHRLICH. Jeder Abschnitt braucht Einleitung, Details, Beispiele.
@@ -37,7 +37,7 @@ Du erstellst Website-Content der den 3-Pass Quality Gate besteht:
 FRAMEWORK — 7 Schichten (ALLE müssen erfüllt sein):
 H — HERO CLARITY: 1 MWA pro Seite, Message Match H1 = Suchbegriff
 E — EMOTION ENGINE: Angst→Neugier→Vertrauen→Begeisterung→Aktion
-L — LOCAL AUTHORITY: 1.500+ W. unique, Lokalkolorit, Schema.org
+L — LOCAL AUTHORITY: 1.500+ W. unique, Stadtbezug, Schema.org
 D — DEPTH CONTENT: Voice-of-Customer, PAS, Long-Tails natürlich
 E — E-E-A-T: Mario Esch als Experten-Entität, Autoren-Byline
 N — NERVE SPEED: WebP-Bilder, keine Embeds, lean HTML
@@ -70,7 +70,7 @@ Diese Regeln machen unsere Seiten zitierbar für Google AI Mode, ChatGPT, Perple
    | 3m Einbauschrank | ab 2.900€ | ab 4.500€ | Aufmaß, Fertigung, Montage |
 
 5. "ZULETZT AKTUALISIERT" SICHTBAR:
-   Direkt unter der Autoren-Byline: "Zuletzt aktualisiert am ${new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}"
+   Wird automatisch beim Export eingefügt — NICHT manuell im Text schreiben.
 
 6. FAQ ALS EIGENSTÄNDIGE ANTWORT-BLÖCKE:
    Jede FAQ-Frage ist eine eigene H3 mit id.
@@ -87,27 +87,29 @@ BOARD-REGELN (PFLICHT):
 - CTA ist KONTEXTUELL: "${gen.ctaText || 'Jetzt deinen Schrank planen — Preis sofort erfahren'}"
 - CTA-Microcopy: "Kostenlos · 30 Minuten · Preis direkt im Anschluss"
 - Video-Call-Satz: "Du sitzt bequem zuhause, Mario zeigt dir am Bildschirm wie dein Schrank aussehen wird — ganz entspannt per Videocall."
-- Differenzierungs-Block: "Echte Schreinerei seit 40 Jahren, kein Franchise-System, kein Online-Konfigurator" — als eigener Absatz
+- Differenzierungs-Block: "Echte Schreinerei mit eigener Werkstatt, kein Franchise-System, kein Online-Konfigurator" — als eigener Absatz
 - Vergleichstabelle: Schreinerhelden vs. Online-Konfigurator (mindestens 5 Zeilen, als echte Tabelle)
 - Testimonials mit ERGEBNIS: "40% mehr Stauraum" statt nur "Tolle Arbeit"
 - Testimonials OHNE Jahreszahl: Nur Vorname + Ort + Ergebnis. KEINE Datumsangaben wie "2024" oder "letztes Jahr" — wirkt veraltet.
 - Synonyme einbauen: Einbauschrank/Wandschrank/Schrankwand, Schreiner/Tischler
 - Bei fehlenden Referenzen EHRLICH: "Unsere nächsten Referenzen aus deiner Region: [Nachbarstadt]"
 - IHK/Handwerkskammer als Trust-Signal erwähnen
-- Autoren-Byline: "Von Mario Esch, Schreinermeister seit 1985, Dozent an der Meisterschule Schwäbisch Hall"
+- Autoren-Byline: NICHT im Text generieren — wird automatisch beim Export eingefügt
 
 BRAND:
 - Du-Form, warm, schwäbisch-authentisch (aber nicht übertrieben dialektal)
-- Firma: Schreinerhelden GmbH & Co. KG, Lindenstraße 9-15, 71540 Murrhardt
+- Firma: Schreinerhelden GmbH & Co. KG, Murrhardt im Schwäbischen Wald
 - Tel: 07192-935 72 00 | Proven Expert: 4,95★ (200+ Bewertungen)
-- Mario Esch: Schreinermeister, 40+ Jahre, Dozent Meisterschule, Fraunhofer-Kooperation
+- Mario Esch: Schreinermeister aus Murrhardt. Eigene Werkstatt, eigenes Team, eigene Montage. Was er zusagt, gilt — vom Aufmaß bis zur letzten Schraube.
+- TON über Mario: Nicht aufschneiden, nicht Titel auflisten. Er ist Handwerker der anpackt, nicht Manager der delegiert. Kein "40+ Jahre Erfahrung", kein "Dozent an der...", kein "Fraunhofer-Kooperation". Stattdessen zeigen statt sagen: "Mario steht selbst bei dir im Dachgeschoss mit dem Laser" — DAS ist der Trust.
+- BYLINE (nur im Export, NICHT im generierten Text): "Mario Esch · Schreinermeister, Murrhardt · Planung, Fertigung und Montage aus einer Hand"
 
 MINDEST-WORTANZAHL: ${minWords} Wörter (siehe Regel #1 oben!).
 
 LAYOUT-VARIANTE: ${gen.layoutVariant || 'LAYOUT_A'}
-${gen.layoutVariant === 'LAYOUT_A' ? 'Reihenfolge: Hero → Inhaltsverzeichnis → Pain → Lösung → Referenzen → Features → Preis-Tabelle → FAQ → Lokalkolorit → CTA' : ''}
-${gen.layoutVariant === 'LAYOUT_B' ? 'Reihenfolge: Hero → Inhaltsverzeichnis → Referenzen → Pain → Lösung → Vergleichstabelle → Preis-Tabelle → Lokalkolorit → FAQ → CTA' : ''}
-${gen.layoutVariant === 'LAYOUT_C' ? 'Reihenfolge: Hero → Inhaltsverzeichnis → Vergleichstabelle → Pain → Referenzen → Lösung → Features → FAQ → Preis-Tabelle → Lokalkolorit → CTA' : ''}
+${gen.layoutVariant === 'LAYOUT_A' ? 'Reihenfolge: Hero → Inhaltsverzeichnis → Pain → Lösung → Referenzen → Features → Preis-Tabelle → FAQ → Stadt-Block → CTA' : ''}
+${gen.layoutVariant === 'LAYOUT_B' ? 'Reihenfolge: Hero → Inhaltsverzeichnis → Referenzen → Pain → Lösung → Vergleichstabelle → Preis-Tabelle → Stadt-Block → FAQ → CTA' : ''}
+${gen.layoutVariant === 'LAYOUT_C' ? 'Reihenfolge: Hero → Inhaltsverzeichnis → Vergleichstabelle → Pain → Referenzen → Lösung → Features → FAQ → Preis-Tabelle → Stadt-Block → CTA' : ''}
 
 FORMAT:
 - Markdown mit klaren H1/H2/H3
@@ -148,19 +150,22 @@ PFLICHT-BLÖCKE (Board-Approved + AI-Citation-Optimiert):
 6. Preis-Transparenz: H2 = "Was kostet ein Einbauschrank in ${city}?" {#preise-${city || 'region'}} — als TABELLE
 7. Video-Call-Erklärung (1 Absatz, kein eigener H2 — in Lösung einbauen)
 8. FAQ: H2 = "Häufige Fragen zu Einbauschränken in ${city}" — 5-6 Fragen als H3, Antwort mit **1-Satz-Fazit**
-9. Stadt-Block: H2 = "Dein Schreiner für ${city} — von [Stadtteil] bis [Stadtteil]" {#schreiner-${city || 'region'}} — schwäbisch, 150+ Wörter
+9. Stadt-Block: H2 als FRAGE: "Warum ist ein Schreiner aus ${city} die beste Wahl?" oder "Wo arbeiten die Schreinerhelden in ${city}?" {#schreiner-${city || 'region'}} — schwäbisch, 150+ Wörter, Teilorte
 10. Kontextueller CTA: "${gen.ctaText}"
-11. Autoren-Byline + "Zuletzt aktualisiert am ${new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}"
+11. KEINE Autoren-Byline im Text — wird automatisch beim WordPress-Export eingefügt
 
 ═══ H2-ÜBERSCHRIFTEN-REGELN (WICHTIG!) ═══
-H2s sind für den KUNDEN, nicht für die interne Gliederung!
-VERBOTEN in H2s: "Lokalkolorit", "Differenzierung", "Pain", "Solution", "Unique Value Add", "CTA", "Hero"
-RICHTIG: Fragen oder Statements aus Kundenperspektive:
-- FALSCH: "Lokalkolorit: Stuttgart" → RICHTIG: "Dein Schreiner für Stuttgart — Qualität aus dem Remstal"
+ALLE H2s MÜSSEN Fragen oder klare Kunden-Statements sein!
+VERBOTEN in H2s: "Differenzierung", "Pain", "Solution", "Unique Value Add", "CTA", "Hero", "Preisgestaltung", "Kundenstimmen"
+JEDE H2 muss als Google-Suchanfrage funktionieren können:
+- FALSCH: "Stuttgart und wir" → RICHTIG: "Wo arbeiten die Schreinerhelden in ${city}?"
+- FALSCH: "Die Stadt und wir" → RICHTIG: "Warum ein Schreiner aus der Region ${city}?"
 - FALSCH: "Unsere Leistungen" → RICHTIG: "Was bekommst du bei einem Schreiner in ${city}?"
 - FALSCH: "Differenzierung" → RICHTIG: "Warum eine echte Schreinerei statt Online-Konfigurator?"
-- FALSCH: "Preisgestaltung" → RICHTIG: "Was kostet ein Einbauschrank in ${city}?"
-- FALSCH: "Kundenstimmen" → RICHTIG: "Das sagen unsere Kunden aus ${city}"
+- FALSCH: "Preisgestaltung" → RICHTIG: "Was kostet ein Dachschrägenschrank in ${city}?"
+- FALSCH: "Kundenstimmen" → RICHTIG: "Was sagen unsere Kunden aus ${city}?"
+- FALSCH: "Die Herausforderung" → RICHTIG: "Warum bleibt Stauraum unter der Dachschräge oft ungenutzt?"
+- FALSCH: "Die Lösung" → RICHTIG: "Wie lösen wir dein Stauramproblem in ${city}?"
 ═══ ENDE H2-REGELN ═══
 
 INTERNE LINKS (natürlich einbauen):
@@ -174,7 +179,7 @@ Wenn du fertig bist, zähle die Wörter. Unter ${gen.targetWordCount}? → Mehr 
 Wir erstellen 18 Orts-Landingpages. JEDE Seite muss ≥60% einzigartigen Text haben.
 VERBOTEN: Generische Absätze die auf jede Stadt passen.
 PFLICHT für JEDE Sektion:
-- Nenne mindestens 2 Teilorte/Stadtteile von ${city} (aus dem Lokalkolorit-Chunk)
+- Nenne mindestens 2 Teilorte/Stadtteile von ${city} (aus der Wissensdatenbank)
 - Baue spezifische Wohnsituationen der Stadt ein (Altbau, Neubau, Reihenhaus — je nach Stadt)
 - Der Pain-Block muss ein konkretes Szenario aus ${city} beschreiben
 - Die Lösung muss Bezug auf die Entfernung Murrhardt → ${city} nehmen
@@ -202,7 +207,7 @@ PFLICHT-BLÖCKE (AI-Citation-Optimiert):
 8. 3 Testimonials mit Ergebnis
 9. 6+ FAQ-Fragen als H3 mit {#faq-...} Ankern, Antwort mit **1-Satz-Fazit**
 10. "Auch verfügbar in: Stuttgart, Ludwigsburg, Heilbronn..." (Orts-LP-Links)
-11. Autoren-Byline + Aktualisierungsdatum
+11. KEINE Byline im Text — Export fügt sie ein
 
 ⚠️ ERINNERUNG: Mindestens ${gen.targetWordCount} Wörter. Jeden Abschnitt 150-200 Wörter.`;
 
@@ -211,7 +216,6 @@ PFLICHT-BLÖCKE (AI-Citation-Optimiert):
 
 THEMA/KEYWORD: "${gen.primaryKeyword}"
 ZIEL-WORTANZAHL: ${gen.targetWordCount} Wörter minimum
-AUTOREN-BYLINE: Von Mario Esch, Schreinermeister seit 1985
 
 PFLICHT (AI-Citation-Optimiert):
 1. TL;DR Key-Takeaway-Box am Anfang
@@ -222,7 +226,7 @@ PFLICHT (AI-Citation-Optimiert):
 6. Interne Links zu Produktseiten + /termin
 7. FAQ-Sektion (3-4 Fragen) als H3 mit {#faq-...} und **1-Satz-Fazit**
 8. CTA am Ende
-9. Autoren-Byline + Aktualisierungsdatum
+9. KEINE Byline im Text — Export fügt sie ein
 
 ⚠️ ERINNERUNG: Mindestens ${gen.targetWordCount} Wörter. Jeden Abschnitt 150-200 Wörter.`;
 
@@ -240,7 +244,7 @@ PFLICHT (AI-Citation-Optimiert):
 5. Link-Hub zu allen verwandten Seiten
 6. 8+ FAQ-Fragen als H3 mit {#faq-...} und **1-Satz-Fazit**
 7. Infografik-Platzhalter für key stats
-8. Autoren-Byline + Aktualisierungsdatum
+8. KEINE Byline im Text — Export fügt sie ein
 
 ⚠️ ERINNERUNG: Mindestens ${gen.targetWordCount} Wörter (Pillar = mind. 2500). Jeden Abschnitt 200+ Wörter.`;
   }
@@ -359,7 +363,7 @@ REGELN (Board-Approved + AI-Citation-Optimiert):
 
 Firma: Schreinerhelden GmbH & Co. KG, Lindenstraße 9-15, 71540 Murrhardt
 Tel: +49 7192 935 72 00 | Rating: 4.95/5 (200+ Reviews)
-Mario Esch: Schreinermeister & Geschäftsführer, Dozent Meisterschule SHA`;
+Mario Esch: Schreinermeister, Inhaber, Murrhardt`;
 
 function buildSchemaPrompt(gen, content) {
   const types = {
@@ -386,70 +390,11 @@ Content (für FAQ-Extraktion + Claim-Verifizierung):
 ${content.slice(0, 4000)}`;
 }
 
-// ── EXPORT SYSTEM PROMPT ──
-
-const EXPORT_SYSTEM = `Du konvertierst Markdown-Content in Elementor-kompatible HTML-Blöcke.
-
-WICHTIG: Der Output wird NICHT automatisch nach WordPress gepusht.
-Melanie kopiert die einzelnen Blöcke von Hand in Elementor.
-Daher: Strukturiere den Output als EINZELNE, KOPIERBARE BLÖCKE.
-
-FORMAT — Jeder Block ist ein eigenständiger HTML-Abschnitt:
-Trenne jeden Block mit einem Kommentar: <!-- BLOCK: [Name] -->
-
-REGELN:
-- KEIN GenerateBlocks-Markup (wir nutzen Elementor)
-- Jeder Block = 1 kopierbarer HTML-Abschnitt für einen Elementor-HTML-Widget
-- Sauberes, minimales HTML ohne Framework-Klassen
-- SEMANTISCHES HTML: <article>, <section>, <nav>, <table>, <details>
-- Jede H2 bekommt id="..." (kebab-case)
-- Jede Sektion in <section id="...">
-- INHALTSVERZEICHNIS als <nav> mit <ol> und Anker-Links
-- FAQ als <details>/<summary> Accordion
-- Tabellen als echte <table> mit <thead>/<tbody>
-- Bilder als <img loading="lazy"> mit Platzhalter-src
-- "Zuletzt aktualisiert am" als <time datetime="...">
-- Schema.org JSON-LD als separater Block zum Kopieren
-- Inline-CSS nur wo nötig, kein externes Stylesheet
-- KEIN Sticky CTA (macht Melanie in Elementor selbst)
-
-BLOCK-REIHENFOLGE:
-<!-- BLOCK: Schema JSON-LD -->
-<!-- BLOCK: Hero -->
-<!-- BLOCK: Inhaltsverzeichnis -->
-<!-- BLOCK: [Jede H2-Sektion als eigener Block] -->
-<!-- BLOCK: Vergleichstabelle -->
-<!-- BLOCK: Preis-Tabelle -->
-<!-- BLOCK: FAQ Accordion -->
-<!-- BLOCK: Lokalkolorit -->
-<!-- BLOCK: CTA -->
-<!-- BLOCK: Autoren-Byline -->
-
-OUTPUT: Nur HTML-Blöcke mit Kommentar-Trennern. Kein Markdown, kein erklärender Text.`;
-
-function buildExportPrompt(gen) {
-  return `Konvertiere diesen Content in kopierbare Elementor-HTML-Blöcke.
-
-WICHTIG: Melanie kopiert jeden Block einzeln in ein Elementor-HTML-Widget.
-Trenne JEDEN Block mit: <!-- BLOCK: [Name] -->
-
-CONTENT (Markdown):
-${gen.outputContent}
-
-SCHEMA (als eigener Block):
-${JSON.stringify(gen.outputSchema, null, 2)}
-
-META:
-Title: ${gen.outputMeta?.title}
-Description: ${gen.outputMeta?.description}
-
-CTA-TEXT: ${gen.ctaText || 'Jetzt Termin buchen'}
-CTA-URL: /termin
-PREIS-RANGE: ${gen.priceRange || ''}
-Aktualisiert: <time datetime="${new Date().toISOString().split('T')[0]}">${new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}</time>
-
-Erstelle die Blöcke jetzt. Kein Sticky CTA (macht Melanie in Elementor).`;
-}
+// ── EXPORT: NICHT MEHR NÖTIG ──
+// Der Elementor-Cloner übernimmt direkt: Markdown → Elementor JSON → WordPress
+// Kein extra GPT-4o Call mehr für HTML-Konvertierung.
+const EXPORT_SYSTEM = 'DEPRECATED — Elementor-Cloner übernimmt';
+function buildExportPrompt() { return 'DEPRECATED'; }
 
 module.exports = {
   buildSystemPrompt, buildUserPrompt,
