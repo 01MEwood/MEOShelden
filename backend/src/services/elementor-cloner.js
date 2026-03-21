@@ -280,6 +280,9 @@ async function cloneTemplate(generation) {
   }
 
   // Find template sections by analyzing their headings
+  // Track which pipeline sections have been used (avoid double-mapping)
+  const usedSections = new Set();
+
   for (let i = 0; i < template.length; i++) {
     const headings = findWidgets([template[i]], 'heading');
     const texts = findWidgets([template[i]], 'text-editor');
@@ -293,8 +296,11 @@ async function cloneTemplate(generation) {
 
     // Match template heading to content section type
     let matched = null;
-    if (headingText.includes('warum') || headingText.includes('konfigurator')) {
+    if (headingText.includes('warum') && (headingText.includes('schreiner') || headingText.includes('konfigurator'))) {
       matched = sectionMap.differenzierung?.[0] || sectionMap.vergleich?.[0];
+    } else if (headingText.includes('warum') && headingText.includes('dachschräge')) {
+      // "Warum ein Dachschrägenschrank?" → replace with pain or intro
+      matched = sectionMap.pain?.[0] || sectionMap.text?.[0];
     } else if (headingText.includes('herausforderung') || headingText.includes('ungenutzt')) {
       matched = sectionMap.pain?.[0];
     } else if (headingText.includes('lösung') || headingText.includes('maßgefertigt')) {
@@ -307,13 +313,20 @@ async function cloneTemplate(generation) {
       matched = sectionMap.preise?.[0];
     } else if (headingText.includes('faq') || headingText.includes('fragen') || headingText.includes('häufig')) {
       matched = sectionMap.faq?.[0];
-    } else if (headingText.includes('lokalkolorit') || headingText.includes('schreiner für') || headingText.includes('und wir')) {
+    } else if (headingText.includes('lokalkolorit') || headingText.includes('schreiner für') || headingText.includes('und wir') || headingText.includes('qualität aus')) {
       matched = sectionMap.lokalkolorit?.[0];
     } else if (headingText.includes('termin') || headingText.includes('jetzt') || headingText.includes('planen')) {
       matched = sectionMap.cta?.[0];
-    } else if (headingText.includes('planungstermin') || headingText.includes('video')) {
+    } else if (headingText.includes('planungstermin') || headingText.includes('video') || headingText.includes('online-termin')) {
       matched = sectionMap.videocall?.[0];
+    } else if (headingText.includes('stauraum') || headingText.includes('ordnung') || headingText.includes('flexible')) {
+      // Features 3-column section → match remaining text sections
+      const remaining = content.sections.filter(s => s.type === 'text' && !usedSections.has(s.title));
+      if (remaining.length > 0) matched = remaining[0];
     }
+
+    // Track used sections to avoid double-mapping
+    if (matched) usedSections.add(matched.title);
 
     if (matched) {
       // Replace heading
@@ -408,6 +421,99 @@ async function cloneTemplate(generation) {
     const ed = tw.settings?.editor || '';
     if (ed.includes('Mario Esch') && (ed.includes('aktualisiert') || ed.includes('Schreinermeister'))) {
       tw.settings.editor = `<div style="text-align:center;color:#666;font-size:14px;padding:20px 0;">Von <strong>Mario Esch</strong>, Schreinermeister seit 1985, Dozent an der Meisterschule Schwäbisch Hall<br><time datetime="${new Date().toISOString().split('T')[0]}">Zuletzt aktualisiert am ${dateStr}</time></div>`;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════
+  // ANTI-DUPLICATE-CONTENT: Global City Replacement
+  // Replaces "Stuttgart" with new city name in ALL widgets
+  // This catches the ~32% "fixed" content that would be identical
+  // ═══════════════════════════════════════════════════
+
+  if (cityNameCapitalized && cityNameCapitalized.toLowerCase() !== 'stuttgart') {
+    // Walk ALL widgets recursively and replace city references
+    function replaceCityInWidgets(elements) {
+      for (const el of elements) {
+        const s = el.settings || {};
+
+        // Heading widgets
+        if (el.widgetType === 'heading' && s.title) {
+          s.title = s.title.replace(/Stuttgart/g, cityNameCapitalized).replace(/stuttgart/g, cityName);
+        }
+
+        // Text Editor widgets
+        if (el.widgetType === 'text-editor' && s.editor) {
+          s.editor = s.editor.replace(/Stuttgart/g, cityNameCapitalized).replace(/stuttgart/g, cityName);
+        }
+
+        // HTML widgets (but not Schema — Schema gets replaced separately)
+        if (el.widgetType === 'html' && s.html && !s.html.includes('ld+json')) {
+          s.html = s.html.replace(/Stuttgart/g, cityNameCapitalized).replace(/stuttgart/g, cityName);
+        }
+
+        // Button widgets
+        if (el.widgetType === 'button' && s.text) {
+          s.text = s.text.replace(/Stuttgart/g, cityNameCapitalized).replace(/stuttgart/g, cityName);
+        }
+
+        // Icon-Box widgets (title + description)
+        if (el.widgetType === 'icon-box') {
+          if (s.title_text) s.title_text = s.title_text.replace(/Stuttgart/g, cityNameCapitalized);
+          if (s.description_text) s.description_text = s.description_text.replace(/Stuttgart/g, cityNameCapitalized);
+        }
+
+        // Call-to-Action widgets
+        if (el.widgetType === 'call-to-action') {
+          if (s.title) s.title = s.title.replace(/Stuttgart/g, cityNameCapitalized);
+          if (s.description) s.description = s.description.replace(/Stuttgart/g, cityNameCapitalized);
+        }
+
+        // Accordion / Toggle (FAQ)
+        if ((el.widgetType === 'accordion' || el.widgetType === 'toggle') && s.tabs) {
+          for (const tab of s.tabs) {
+            if (tab.tab_title) tab.tab_title = tab.tab_title.replace(/Stuttgart/g, cityNameCapitalized);
+            if (tab.tab_content) tab.tab_content = tab.tab_content.replace(/Stuttgart/g, cityNameCapitalized);
+          }
+        }
+
+        // Testimonial Carousel — add city context to names
+        if (el.widgetType === 'testimonial-carousel' && s.slides) {
+          for (const slide of s.slides) {
+            if (slide.name) {
+              slide.name = slide.name.replace(/Stuttgart/g, cityNameCapitalized).replace(/aus der Region/g, `aus ${cityNameCapitalized}`);
+            }
+          }
+        }
+
+        // Recurse into children
+        if (el.elements) replaceCityInWidgets(el.elements);
+      }
+    }
+
+    replaceCityInWidgets(template);
+    console.log(`🔄 Anti-Duplicate: "Stuttgart" → "${cityNameCapitalized}" in allen Widgets ersetzt`);
+  }
+
+  // ── Replace Referenzen intro with city-specific version ──
+  for (const tw of allTexts) {
+    const ed = tw.settings?.editor || '';
+    if (ed.includes('In vielen Häusern und Wohnungen sind Räume mit Dachschrägen')) {
+      tw.settings.editor = tw.settings.editor
+        .replace(
+          /In vielen Häusern und Wohnungen sind Räume mit Dachschrägen eine Herausforderung[^.]*\./,
+          `In ${cityNameCapitalized} kennen wir die typischen Wohnsituationen — von Altbauten mit verwinkelten Dachgeschossen bis zu modernen Neubauten mit besonderen Grundrissen.`
+        );
+    }
+  }
+
+  // ── Replace generic "Dein persönlicher Online-Planungstermin" text ──
+  for (const tw of allTexts) {
+    const ed = tw.settings?.editor || '';
+    if (ed.includes('Online-Termin planen wir gemeinsam') && !ed.includes(cityNameCapitalized)) {
+      tw.settings.editor = ed.replace(
+        /deinen maßgefertigten Schrank/,
+        `deinen maßgefertigten Schrank für dein Zuhause in ${cityNameCapitalized}`
+      );
     }
   }
 
