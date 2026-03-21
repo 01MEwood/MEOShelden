@@ -10,12 +10,56 @@ const path = require('path');
 const MASTER_PATH = path.join(__dirname, '..', 'templates', 'orts-lp-master.json');
 let masterTemplate = null;
 
-function getMaster() {
-  if (!masterTemplate) {
-    const raw = fs.readFileSync(MASTER_PATH, 'utf-8');
-    masterTemplate = JSON.parse(raw);
+// Master template page ID in WordPress (Stuttgart LP)
+const MASTER_WP_PAGE_ID = 9741;
+
+async function getMaster() {
+  if (masterTemplate) return JSON.parse(JSON.stringify(masterTemplate));
+
+  // Try local file first
+  try {
+    if (fs.existsSync(MASTER_PATH)) {
+      const raw = fs.readFileSync(MASTER_PATH, 'utf-8');
+      masterTemplate = JSON.parse(raw);
+      console.log(`✅ Master-Template geladen (lokal, ${Math.round(raw.length/1024)}KB)`);
+      return JSON.parse(JSON.stringify(masterTemplate));
+    }
+  } catch (e) {
+    console.warn(`⚠️ Lokales Template nicht lesbar: ${e.message}`);
   }
-  return JSON.parse(JSON.stringify(masterTemplate)); // Deep clone
+
+  // Fallback: Fetch from WordPress API
+  console.log('📡 Lade Master-Template von WordPress...');
+  const wpUrl = process.env.WP_URL || 'https://schreinerhelden.de';
+  const wpUser = process.env.WP_USER;
+  const wpAppPassword = process.env.WP_APP_PASSWORD;
+
+  if (!wpUser || !wpAppPassword) throw new Error('Master-Template nicht gefunden und keine WP-Credentials für Fallback.');
+
+  const auth = Buffer.from(`${wpUser}:${wpAppPassword}`).toString('base64');
+  const res = await fetch(`${wpUrl}/wp-json/wp/v2/pages/${MASTER_WP_PAGE_ID}?context=edit`, {
+    headers: { 'Authorization': `Basic ${auth}` },
+  });
+  if (!res.ok) throw new Error(`WordPress API ${res.status}: Template-Seite ${MASTER_WP_PAGE_ID} nicht erreichbar.`);
+
+  const page = await res.json();
+  const edata = page?.meta?._elementor_data;
+  if (!edata) throw new Error('Keine Elementor-Daten auf der Master-Seite gefunden.');
+
+  masterTemplate = typeof edata === 'string' ? JSON.parse(edata) : edata;
+  console.log(`✅ Master-Template von WordPress geladen (${Math.round(JSON.stringify(masterTemplate).length/1024)}KB)`);
+
+  // Cache locally for next time
+  try {
+    const dir = path.dirname(MASTER_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(MASTER_PATH, JSON.stringify(masterTemplate), 'utf-8');
+    console.log('💾 Template lokal gecacht.');
+  } catch (e) {
+    console.warn(`⚠️ Konnte Template nicht lokal cachen: ${e.message}`);
+  }
+
+  return JSON.parse(JSON.stringify(masterTemplate));
 }
 
 // Random Elementor-style ID
@@ -198,8 +242,8 @@ function findSectionWith(elements, test) {
 // MAIN CLONE FUNCTION
 // ════════════════════════════════════
 
-function cloneTemplate(generation) {
-  const template = getMaster();
+async function cloneTemplate(generation) {
+  const template = await getMaster();
   regenerateIds(template);
 
   const content = parseContent(generation.outputContent || '');
